@@ -49,7 +49,7 @@ def create_test_args():
     parser.add_argument('--batch_size', default=1, type=int)
 
     # load weights
-    parser.add_argument('--load_model', default="/path/to/saved_model.pth")
+    parser.add_argument('--saved_dir', default="/path/to/saved_dir")
 
     # floor-field settings
     parser.add_argument('--staticff', default=0, type=int)

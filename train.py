@@ -69,6 +69,15 @@ def main():
     torch.cuda.manual_seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # Dataset
+    train_dataset = dataset_factory(train_list, args, mode="train")
+    val_dataset = dataset_factory(val_list, args, mode="val")
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=args.batch_size,
+                                               shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                             batch_size=args.batch_size)
+
     # Model
     if args.bn != 0 or args.do_rate > 0.0:
         load_weight = True
@@ -108,9 +117,10 @@ def main():
 
     # Train Model
     for epoch in range(args.start_epoch, args.epochs):
+        logger.info("Epoch: [{}/{}]".format(epoch, args.epochs))
         # train for one epoch
         start_epoch_time = time.time()
-        train_epoch(train_list, model, criterion, optimizer, epoch, device)
+        train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
         end_epoch_time = time.time()
 
         epoch_time = end_epoch_time - start_epoch_time
@@ -133,17 +143,10 @@ def main():
             bestname=os.path.join(args.savefolder, 'model_best.pth.tar'))
 
 
-def train_epoch(train_list, model, criterion, optimizer, epoch, device):
+def train_epoch(args, train_loader, model, criterion, optimizer, device, logger):
     losses = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
-    train_dataset = dataset_factory(train_list, args, mode="train")
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True)
-    print('epoch %d, processed %d samples, lr %.10f' % (epoch, epoch * len(train_loader.dataset), args.lr))
 
     mae = 0
     model.train()
@@ -224,27 +227,13 @@ def train_epoch(train_list, model, criterion, optimizer, epoch, device):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        del prev_img
-        del img
-        del post_img
-        del target
-
         if i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  .format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
-            with open(os.path.join(args.savefolder, 'log.txt'), mode='a') as f:
-                f.write('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t\n'
-                  .format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
+            logger.info('Batch: [{1}/{2}]\t'
+                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                        'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        .format(i, len(train_loader), batch_time=batch_time,
+                         data_time=data_time, loss=losses))
 
     mae = mae/len(train_loader)
     print(' * Train MAE {mae:.3f} '

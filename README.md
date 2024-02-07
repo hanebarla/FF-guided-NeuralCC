@@ -24,6 +24,7 @@ python create_labels.py CrowdFlow --path /path/to/CrowdFlow --mode once
 ```
 
 ## 3. Train model
+After creating labels, the model is trained. The --penalty argument allows us to scale our proposed penalty term during training.
 
 The command below shows an example of training CAN mode with CrowdFlow datast A, using MSE loss and our penalty term.
 ```sh
@@ -31,15 +32,16 @@ python train.py A_train_once.csv A_val_once.csv --dataset CrowdFlow --exp /path/
 ```
 
 ## 4. Tuning hyperparameters of floor-field
+If the floor-field model is to be used to correct the model's output, the hyperparameters need to be tuned before its evaluation.
 
 The command below shows an example of tuning hyperparameters of static and dynamic floor field's hyperparameters with CrowdFlow datast A.
 ```sh
-python ff_search_param.py A_test_once.csv --dataset CrowdFlow --exp /path/to/saved_dir --DynamicFF 1 --StaticFF 1
+python ff_search_param.py A_test_once.csv --dataset CrowdFlow --saved_dir /path/to/saved_dir --DynamicFF 1 --StaticFF 1
 ```
 
 ## 5. Test
 
 The command below shows an example of testing of both floor fields with CrowdFlow datast A.
 ```sh
-python ff_test.py A_test_once.csv --dataset CrowdFlow --exp /path/to/saved_dir --DynamicFF 1 --StaticFF 1
+python ff_test.py A_test_once.csv --dataset CrowdFlow --saved_dir /path/to/saved_dir --DynamicFF 1 --StaticFF 1
 ```
