@@ -8,7 +8,7 @@ Download the CrowdFlow dataset from the link below. The password is the name of 
 - [https://hidrive.ionos.com/lnk/LUiCHfYG](https://hidrive.ionos.com/lnk/LUiCHfYG)
 
 ### FDST
-Download the FDST dataset from the link below. More details can be found in the official FDST repo [sweetyy83/Lstn_fdst_dataset](https://github.com/sweetyy83/Lstn_fdst_dataset)
+Download the FDST dataset from the link below. More details can be found in the official FDST repo [sweetyy83/Lstn_fdst_dataset](https://github.com/sweetyy83/Lstn_fdst_dataset).
 - [https://drive.google.com/drive/folders/19c2X529VTNjl3YL1EYweBg60G70G2D-w](https://drive.google.com/drive/folders/19c2X529VTNjl3YL1EYweBg60G70G2D-w)
 
 ### CityStreet
@@ -25,18 +25,21 @@ python create_labels.py CrowdFlow --path /path/to/CrowdFlow --mode once
 
 ## 3. Train model
 
+The command below shows an example of training CAN mode with CrowdFlow datast A, using MSE loss and our penalty term.
 ```sh
-python train.py A_train_add.csv A_val_add.csv --dataset CrowdFlow --exp /groups1/gca50095/aca10350zi/habara_exp/cross_val_A_add/ --myloss 0
+python train.py A_train_once.csv A_val_once.csv --dataset CrowdFlow --exp /path/to/save_dir --penalty 0.1
 ```
 
 ## 4. Tuning hyperparameters of floor-field
 
+The command below shows an example of tuning hyperparameters of static and dynamic floor field's hyperparameters with CrowdFlow datast A.
 ```sh
-python FF_search_param.py data/Scene_IM04.csv data/Scene_IM05.csv --dataset CrowdFlow -nw /groups1/gca50095/aca10350zi/habara_exp/FF_confusion_matrix_A/CrowdFlow/${c}/${s}/model_best.pth.tar --DynamicFF 1 --StaticFF 1
+python ff_search_param.py A_test_once.csv --dataset CrowdFlow --exp /path/to/saved_dir --DynamicFF 1 --StaticFF 1
 ```
 
 ## 5. Test
 
+The command below shows an example of testing of both floor fields with CrowdFlow datast A.
 ```sh
-python FF_test.py data/Scene_IM04.csv data/Scene_IM05.csv --dataset CrowdFlow --load_model /groups1/gca50095/aca10350zi/habara_exp/FF_confusion_matrix_A/CrowdFlow/${c}/${s}/model_best.pth.tar --DynamicFF 1 --StaticFF 1
+python ff_test.py A_test_once.csv --dataset CrowdFlow --exp /path/to/saved_dir --DynamicFF 1 --StaticFF 1
 ```
