@@ -3,6 +3,8 @@
 We proposed a method that combines neural networks with crowd dynamics. Specifically, we introduced a loss function to represent prior knowledge of this dynamics and propose static/dynamic floor field models. In the main manuscript, we discussed the effectiveness of these methods through numerical experiments. To ensure reproducibility and transparency of our experiments, we made the scripts used for evaluation available in this repository.
 
 <!-- 我々はニューラルネットワークと群衆ダイナミクスを組み合わせた手法を提案した．具体的には，このダイナミクスの事前知識を表す損失関数と静的/動的フロアフィールドモデルを提案し，本文ではその効果について数値実験の結果を通じて詳しく論じた．その実験の再現性・透明性を確保するために，評価に用いたスクリプトを本レポジトリに公開する． -->
+
+To reproduce the experiments, follow the steps outlined below:
 1. [Prepare an environment](#1-prepare-an-environment)
 1. [Make labels and json files](#2-make-labels-and-json-files)
 1. [Train model](#3-train-model)
