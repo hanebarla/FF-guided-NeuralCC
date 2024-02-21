@@ -22,7 +22,7 @@ def create_train_args():
 
     # training settings
     parser.add_argument('--lr', default=1e-4, type=float)
-    parser.add_argument('--penalty', default=1e-5, type=float)
+    parser.add_argument('--penalty', default=0, type=float)
     parser.add_argument('--opt', default="adam")
     parser.add_argument('--momentum', default=0.95, type=float)
     parser.add_argument('--decay', default=5e-4, type=float)
