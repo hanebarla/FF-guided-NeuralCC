@@ -204,17 +204,20 @@ def cross_dataset(args, train_list, val_list, test_list, concat_file_index):
     train_file_list = []
     for file_name in train_list:
         train_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(train_file_list, os.path.join('{}_train_{}.json'.format(concat_file_index, args.mode)))
+    # json_file_concat(train_file_list, os.path.join('crowdflow{}_train_{}.json'.format(concat_file_index, args.mode)))
+    json_file_concat(train_file_list, os.path.join('crowdflow_{}_train.json'.format(args.mode)))
 
     val_file_list = []
     for file_name in val_list:
         val_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(val_file_list, os.path.join('{}_val_{}.json'.format(concat_file_index, args.mode)))
+    # json_file_concat(val_file_list, os.path.join('crowdflow{}_val_{}.json'.format(concat_file_index, args.mode)))
+    json_file_concat(val_file_list, os.path.join('crowdflow_{}_val.json'.format(args.mode)))
 
     test_file_list = []
     for file_name in test_list:
         test_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(test_file_list, os.path.join('{}_test_{}.json'.format(concat_file_index, args.mode)))
+    # json_file_concat(test_file_list, os.path.join('crowdflow{}_test_{}.json'.format(concat_file_index, args.mode)))
+    json_file_concat(test_file_list, os.path.join('crowdflow_{}_test.json'.format(args.mode)))
 
 def concat_crowdflow_csv(args):
     A_train_dataset = [1, 2, 3]
@@ -222,25 +225,25 @@ def concat_crowdflow_csv(args):
     A_test_dataset = [5]
     cross_dataset(args, A_train_dataset, A_val_dataset, A_test_dataset, 'A')
 
-    B_train_dataset = [2, 3, 4]
-    B_val_dataset = [5]
-    B_test_dataset = [1]
-    cross_dataset(args, B_train_dataset, B_val_dataset, B_test_dataset, 'B')
+    # B_train_dataset = [2, 3, 4]
+    # B_val_dataset = [5]
+    # B_test_dataset = [1]
+    # cross_dataset(args, B_train_dataset, B_val_dataset, B_test_dataset, 'B')
 
-    C_train_dataset = [3, 4, 5]
-    C_val_dataset = [1]
-    C_test_dataset = [2]
-    cross_dataset(args, C_train_dataset, C_val_dataset, C_test_dataset, 'C')
+    # C_train_dataset = [3, 4, 5]
+    # C_val_dataset = [1]
+    # C_test_dataset = [2]
+    # cross_dataset(args, C_train_dataset, C_val_dataset, C_test_dataset, 'C')
 
-    D_train_dataset = [4, 5, 1]
-    D_val_dataset = [2]
-    D_test_dataset = [3]
-    cross_dataset(args, D_train_dataset, D_val_dataset, D_test_dataset, 'D')
+    # D_train_dataset = [4, 5, 1]
+    # D_val_dataset = [2]
+    # D_test_dataset = [3]
+    # cross_dataset(args, D_train_dataset, D_val_dataset, D_test_dataset, 'D')
 
-    E_train_dataset = [5, 1, 2]
-    E_val_dataset = [3]
-    E_test_dataset = [4]
-    cross_dataset(args, E_train_dataset, E_val_dataset, E_test_dataset, 'E')
+    # E_train_dataset = [5, 1, 2]
+    # E_val_dataset = [3]
+    # E_test_dataset = [4]
+    # cross_dataset(args, E_train_dataset, E_val_dataset, E_test_dataset, 'E')
 
 def FDSTDatasetGenerator(root, mode="once"):
     train_dir = os.path.join(root, 'train_data')
@@ -362,14 +365,18 @@ def create_fdst_json(args):
         staticff_path = os.path.join(test_dir, str(scene), 'staticff_45x80.npz')
         np.savez_compressed(staticff_path, x=staticff)
     
-    with open(os.path.join('fdst_train.json'), 'w') as f:
-        json.dump(train_output_path_dict, f)
-    with open(os.path.join('fdst_test.json'), 'w') as f:
-        json.dump(test_output_path_dict, f)
-    with open(os.path.join('fdst_train_per_scene.json'), 'w') as f:
+    # with open(os.path.join('fdst_{}_train.json'.format(args.mode)), 'w') as f:
+    #     json.dump(train_output_path_dict, f)
+    # with open(os.path.join('fdst_{}_test.json'.format(args.mode)), 'w') as f:
+    #     json.dump(test_output_path_dict, f)
+    with open(os.path.join('fdst_{}_train.json'.format(args.mode)), 'w') as f:
         json.dump(train_output_path_dict_per_scene, f)
-    with open(os.path.join('fdst_test_per_scene.json'), 'w') as f:
+    with open(os.path.join('fdst_{}_test.json'.format(args.mode)), 'w') as f:
         json.dump(test_output_path_dict_per_scene, f)
+    # with open(os.path.join('fdst_{}_train_per_scene.json'.format(args.mode)), 'w') as f:
+    #     json.dump(train_output_path_dict_per_scene, f)
+    # with open(os.path.join('fdst_{}_test_per_scene.json'.format(args.mode)), 'w') as f:
+    #     json.dump(test_output_path_dict_per_scene, f)
 
 if __name__ == "__main__":
     main()

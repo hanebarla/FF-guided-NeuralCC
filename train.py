@@ -40,6 +40,14 @@ def main():
         train_data = json.load(outfile)
     with open(args.val_json, 'r') as outfile:
         val_data = json.load(outfile)
+    
+    if args.dataset != "crowdflow":
+        new_train_data = []
+        new_val_data = []
+        for data in train_data.values():
+            new_train_data.extend(data)
+        for data in val_data.values():
+            new_val_data.extend(data)
 
     if not os.path.exists(args.savefolder):
         os.makedirs(args.savefolder)
@@ -54,8 +62,6 @@ def main():
     torch.manual_seed(args.seed)
 
     # Dataset
-    train_dataset = dataset_factory(train_list, args, mode="train")
-    val_dataset = dataset_factory(val_list, args, mode="val")
     train_dataset, val_dataset = dataset_factory(args, train_data, val_data, mode="train")
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=args.batch_size,
