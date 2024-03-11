@@ -24,11 +24,18 @@ def main():
 
     if args.dataset == "CrowdFlow":
         CrowdFlowDatasetGenerator(args.path, args.mode)
-        create_crowdflow_csv(args)
+        create_crowdflow_json(args)
         concat_crowdflow_csv(args)
     elif args.dataset == "FDST":
         FDSTDatasetGenerator(args.path, args.mode)
         create_fdst_json(args)
+    elif args.dataset == "CityStreet":
+        pass
+    elif args.dataset == "venice":
+        pass
+    else:
+        raise NotImplementedError("Dataset {} is not supported.".format(args.dataset))
+    
 
 def person_annotate_img_generator(person_pos, frame, mode="add"):
     """
@@ -79,11 +86,6 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
 
 
 def CrowdFlowDatasetGenerator(root, mode="once"):
-    """
-    CrowdFlow Dataset Generator
-    ------
-        (root, mode) --> (npz)
-    """
     frame_num_list = [300, 300, 250, 300, 450]
     FFdataset_path = os.path.join(root, "ff_{}".format(mode))
     if not os.path.isdir(FFdataset_path):
@@ -137,34 +139,7 @@ def CrowdFlowDatasetGenerator(root, mode="once"):
         np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_90x160.npz"), x=staticff_label_90x160)
         np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_45x80.npz"), x=staticff_label_45x80)
 
-def create_crowdflow_csv(args):
-    """
-    csv format
-    --------
-        train
-            index 0: input image(step t),
-            index 1: person label(step t),
-            index 2: input label(step t-1),
-            index 3: person label(step t-1),
-            index 4: label flow(step t-1 2 t),
-            index 5: input image(step t+1),
-            index 6: preson label(step t+1),
-            index 7: label flow(step t 2 t+1)
-
-        test
-            index 0: input image(step tm),
-            index 1: person label(step tm),
-            index 2: input image(step t),
-            index 3: person label(step t),
-            index 4: label flow(step tm 2 t)
-    """
-    AllPathList = []
-    AllPathDict = {}
-    TrainPathList = []
-    TrainPathDict = {}
-    TestPathList = []
-    TestPathDict = {}
-
+def create_crowdflow_json(args):
     frame_num_list = [300, 300, 250, 300, 450]
     DatasetFolder = args.path
     ImgFolder = DatasetFolder + "images/"
@@ -186,7 +161,6 @@ def create_crowdflow_csv(args):
         gtTraj_img_path = GTTrajFolder + scene
 
         tmpPathList = []
-        tmpPathDict = {}
 
         for fr in range(frame_num - 2):
             tm = fr
@@ -207,82 +181,41 @@ def create_crowdflow_csv(args):
             tm2t_flow_path = GTFlowFolder + scene + "frameGT_{:0=4}.png".format(tm)
             t2tp_flow_path = GTFlowFolder + scene + "frameGT_{:0=4}.png".format(t)
 
-            PathList_per_frame = [
-                t_img_path, t_person_img_path,
-                tm_img_path, tm_person_img_path, tm2t_flow_path,
-                tp_img_path, tp_person_img_path, t2tp_flow_path
-            ]
+            PathList_per_frame = {
+                "prev": tm_img_path,
+                "now": t_img_path,
+                "post": tp_img_path,
+                "target": t_person_img_path,
+            }
 
-            tmpPathList.append(t_img_path)
-            tmpPathDict[t_img_path] = PathList_per_frame
+            tmpPathList.append(PathList_per_frame)
 
-            if fr == 0:
-                all_pathlist_per_frame = [tm_img_path, tm_person_img_path,
-                                          t_img_path, t_person_img_path,
-                                          tm2t_flow_path]
-                AllPathList.append(tm_img_path)
-                AllPathDict[tm_img_path] = all_pathlist_per_frame
+        with open("Scene_{}_{}.json".format(scene.replace("/", ""), args.mode), "w") as f:
+            json.dump(tmpPathList, f)
 
-            all_pathlist_per_frame = [t_img_path, t_person_img_path,
-                                      tp_img_path, tp_person_img_path,
-                                      t2tp_flow_path]
-            AllPathList.append(t_img_path)
-            AllPathDict[t_img_path] = all_pathlist_per_frame
-
-            if int(i / 2) < 3:  # TrainPathes
-                PathList_per_frame = [t_img_path, t_person_img_path,
-                                      tm_img_path, tm_person_img_path, tm2t_flow_path,
-                                      tp_img_path, tp_person_img_path, t2tp_flow_path]
-                TrainPathList.append(t_img_path)
-                TrainPathDict[t_img_path] = PathList_per_frame
-            else:  # TestPathes
-                if fr == 0:
-                    tm_PathList_per_frame = [tm_img_path, tm_person_img_path,
-                                             t_img_path, t_person_img_path,
-                                             tm2t_flow_path]
-                    TestPathList.append(tm_img_path)
-                    TestPathDict[tm_img_path] = tm_PathList_per_frame
-
-                t_PathList_per_frame = [t_img_path, t_person_img_path,
-                                        tp_img_path, tp_person_img_path,
-                                        t2tp_flow_path]
-                TestPathList.append(t_img_path)
-                TestPathDict[t_img_path] = t_PathList_per_frame
-
-        with open("Scene_{}_{}.csv".format(scene.replace("/", ""), args.mode), "w", newline='') as f:
-            writer = csv.writer(f)
-            for path in tmpPathList:
-                writer.writerow(tmpPathDict[path])
-
-def csv_file_concat(file_list, file_name):
+def json_file_concat(file_list, file_name):
     file_data_list = []
     for file in file_list:
         with open(file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                file_data_list.append(row)
+            file_data_list += json.load(f)
     with open(file_name, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerows(file_data_list)
+        json.dump(file_data_list, f)
 
 def cross_dataset(args, train_list, val_list, test_list, concat_file_index):
     train_file_list = []
     for file_name in train_list:
-        train_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.csv'.format(file_name, args.mode)))
-        # train_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_hDyn_{}.csv'.format(file_name, args.mode)))
-    csv_file_concat(train_file_list, os.path.join(args.savefolder, '{}_train_{}.csv'.format(concat_file_index, args.mode)))
+        train_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(train_file_list, os.path.join(args.savefolder, '{}_train_{}.json'.format(concat_file_index, args.mode)))
 
     val_file_list = []
     for file_name in val_list:
-        val_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.csv'.format(file_name, args.mode)))
-        # val_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_hDyn_{}.csv'.format(file_name, args.mode)))
-    csv_file_concat(val_file_list, os.path.join(args.savefolder, '{}_val_{}.csv'.format(concat_file_index, args.mode)))
+        val_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(val_file_list, os.path.join(args.savefolder, '{}_val_{}.json'.format(concat_file_index, args.mode)))
 
     test_file_list = []
     for file_name in test_list:
-        test_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.csv'.format(file_name, args.mode)))
-        # test_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_hDyn_{}.csv'.format(file_name, args.mode)))
-    csv_file_concat(test_file_list, os.path.join(args.savefolder, '{}_test_{}.csv'.format(concat_file_index, args.mode)))
+        test_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(test_file_list, os.path.join(args.savefolder, '{}_test_{}.json'.format(concat_file_index, args.mode)))
 
 def concat_crowdflow_csv(args):
     A_train_dataset = [1, 2, 3]
@@ -365,12 +298,12 @@ def create_fdst_json(args):
     test_scene = []
     for i in range(100):
         if (i+1) % 5 == 4 or (i+1) % 5 == 0:
-            test_scene.append('scene_{}'.format(i+1))
+            test_scene.append(i+1)
         else:
-            train_scene.append('scene_{}'.format(i+1))
+            train_scene.append(i+1)
 
-    train_output_path_dict = {}
-    test_output_path_dict = {}
+    train_output_path_dict = []
+    test_output_path_dict = []
     staticff = None
     for scene in train_scene:
         img_paths = os.listdir(os.path.join(train_dir, scene))
@@ -380,7 +313,7 @@ def create_fdst_json(args):
 
         for img_path in img_paths:
             gt_path = img_path.replace('.jpg', '_{}.npz'.format(args.mode))
-            train_output_path_dict[scene].append({'img': img_path, 'gt': gt_path})
+            train_output_path_dict.append({'img': img_path, 'gt': gt_path})
 
             target = np.load(gt_path)['density']
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
@@ -403,7 +336,7 @@ def create_fdst_json(args):
 
         for img_path in img_paths:
             gt_path = img_path.replace('.jpg', '_{}.npz'.format(args.mode))
-            test_output_path_dict[scene].append({'img': img_path, 'gt': gt_path})
+            test_output_path_dict.append({'img': img_path, 'gt': gt_path})
 
             target = np.load(gt_path)['density']
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64

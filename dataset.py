@@ -8,7 +8,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision
-from .image import *
+from .utils import *
 import torchvision.transforms.functional as F
 from torchvision import transforms
 import csv
@@ -17,85 +17,85 @@ import scipy.io
 from scipy.ndimage.filters import gaussian_filter
 
 
-def dataset_factory(args, dlist, arguments, mode="train"):
-    if arguments.dataset == "FDST":
-        if mode == "train":
-            return listDataset(
-                dlist,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    ),
-                ]),
-                train=True,
-                mode=arguments.data_mode,
-                batch_size=args.batch_size,
-                num_workers=args.workers
-            )
-        else:
-            return listDataset(
-                dlist,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    ),
-                ]), train=False
-            )
-    elif arguments.dataset == "CrowdFlow":
-        return CrowdDatasets(
-            dlist,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                )
-            ])
+def dataset_factory(args, train_data, val_data, mode="train"):
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize(
+                                        mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225]
+                                    )])
+    if args.dataset == "FDST":
+        train_dataset = FDSTDataset(
+            train_data,
+            transform=transform,
+            train=True,
+            mode=args.data_mode
         )
-    elif arguments.dataset == "venice":
-        return VeniceDataset(
-            dlist,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                )
-            ])
+        val_dataset = FDSTDataset(
+            val_data,
+            transform=transform,
+            train=False,
+            mode=args.data_mode
         )
-    elif arguments.dataset == "CityStreet":
-        if mode == "train":
-            return CityStreetDataset(
-                dlist,
-                data_type=arguments.data_mode,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    )
-                ])
-            )
-        else:
-            return CityStreetDataset(
-                dlist,
-                data_type=arguments.data_mode,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    )
-                ])
-            )
+    elif args.dataset == "CrowdFlow":
+        train_dataset = CrowdDatasets(
+            train_data,
+            data_type=args.data_mode,
+            transform=transform
+        )
+        val_dataset = CrowdDatasets(
+            val_data,
+            data_type=args.data_mode,
+            transform=transform
+        )
+    elif args.dataset == "venice":
+        train_dataset = VeniceDataset(
+            train_data,
+            transform=transform
+        )
+        val_dataset = VeniceDataset(
+            val_data,
+            transform=transform
+        )
+    elif args.dataset == "CityStreet":
+        train_dataset = CityStreetDataset(
+            train_data,
+            data_type=args.data_mode,
+            transform=transform
+        )
+        val_dataset = CityStreetDataset(
+            val_data,
+            data_type=args.data_mode,
+            transform=transform
+        )
     else:
-        raise ValueError
+        raise NotImplementedError("No such dataset {}".format(args.dataset))
+    
+    return train_dataset, val_dataset
 
-class listDataset(Dataset):
+
+class CrowdDataset(Dataset):
+    def __init__(self, dict, transform, mode="once"):
+        self.dict = dict
+        self.transform = transform
+        self.mode = mode
+
+    def __len__(self):
+        return len(self.dict)
+    
+    def __getitem__(self, index):
+        prev_path = self.dict[index]["prev"]
+        now_path = self.dict[index]["now"]
+        post_path = self.dict[index]["post"]
+        target_path = self.dict[index]["target"]
+
+        prev_img = Image.open(prev_path).convert('RGB')
+        now_img = Image.open(now_path).convert('RGB')
+        post_img = Image.open(post_path).convert('RGB')
+
+        target = np.load(target_path)["x"]
+
+
+class FDSTDataset(Dataset):
     def __init__(self, root, shape=None, transform=None, train=False, mode="once", batch_size=1, num_workers=4):
         if train:
             random.shuffle(root)
@@ -437,66 +437,6 @@ class VeniceDataset(Dataset):
         target = torch.from_numpy(target.astype(np.float32)).clone()
 
         return prev_img, now_img, next_img, target
-
-
-class PointsDataset(Dataset):
-    def __init__(self, pathjson=None, transform=None, width=640, height=360) -> None:
-        super().__init__()
-        with open(pathjson, "r") as f:
-            self.allpath = json.load(f)
-        self.transform = transform
-        self.width = width
-        self.height = height
-
-    def __len__(self) -> int:
-        return len(self.allpath)
-
-    def __getitem__(self, index: int):
-        prev_path = self.allpath[index]["prev"]
-        now_path = self.allpath[index]["now"]
-        next_path = self.allpath[index]["next"]
-        target_path = self.allpath[index]["now_label"]
-
-        prev_img = Image.open(prev_path).convert('RGB')
-        now_img = Image.open(now_path).convert('RGB')
-        next_img = Image.open(next_path).convert('RGB')
-        target = Image.open(target_path).convert('L')
-
-        prev_img = prev_img.resize((640, 360))
-        now_img = now_img.resize((640, 360))
-        next_img = next_img.resize((640, 360))
-
-        target_num = np.asarray(target)
-        target_num = target_num / 255.0
-        target_num = cv2.resize(target_num,
-                        (int(target_num.shape[1] / 8),
-                         int(target_num.shape[0] / 8)),
-                         interpolation=cv2.INTER_CUBIC)
-
-        if self.transform is not None:
-            prev_img = self.transform(prev_img)
-            now_img = self.transform(now_img)
-            next_img = self.transform(next_img)
-
-        return prev_img, now_img, next_img, target_num
-
-
-def get_test_dataset(datakind, datalist):
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225])
-    ])
-
-    if datakind == "FDST":
-        return listDataset(datalist, transform=transform)
-    elif datakind == "CrowdFlow":
-        return CrowdDatasets(datalist, transform=transform)
-    elif datakind == "venice":
-        return VeniceDataset(datalist, transform=transform)
-    else:
-        print("dataset name not found")
 
 
 class Datapath():

@@ -148,22 +148,18 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
+    on_dloss = 1 if args.penalty != 0 else 0
     mae = 0
     model.train()
     end = time.time()
 
     for i, (prev_img, img, post_img, target) in enumerate(train_loader):
-
         data_time.update(time.time() - end)
 
-        prev_img = prev_img.to(device, dtype=torch.float)
-        prev_img = Variable(prev_img)
-
-        img = img.to(device, dtype=torch.float)
-        img = Variable(img)
-
-        post_img = post_img.to(device, dtype=torch.float)
-        post_img = Variable(post_img)
+        prev_img = prev_img.to(device)
+        img = img.to(device)
+        post_img = post_img.to(device)
+        target = target.to(device)
 
         prev_flow = model(prev_img, img)
         post_flow = model(img, post_img)
@@ -171,8 +167,6 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
         prev_flow_inverse = model(img, prev_img)
         post_flow_inverse = model(post_img, img)
 
-        target = target.type(torch.FloatTensor)[0].cuda()
-        target = Variable(target)
 
         # mask the boundary locations where people can move in/out between regions outside image plane
         mask_boundry = torch.zeros(prev_flow.shape[2:])
@@ -180,8 +174,6 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
         mask_boundry[-1, :] = 1.0
         mask_boundry[:, 0] = 1.0
         mask_boundry[:, -1] = 1.0
-
-        mask_boundry = Variable(mask_boundry.cuda())
 
         reconstruction_from_prev = F.pad(prev_flow[0,0,1:,1:],(0,1,0,1))+F.pad(prev_flow[0,1,1:,:],(0,0,0,1))+F.pad(prev_flow[0,2,1:,:-1],(1,0,0,1))+F.pad(prev_flow[0,3,:,1:],(0,1,0,0))+prev_flow[0,4,:,:]+F.pad(prev_flow[0,5,:,:-1],(1,0,0,0))+F.pad(prev_flow[0,6,:-1,1:],(0,1,1,0))+F.pad(prev_flow[0,7,:-1,:],(0,0,1,0))+F.pad(prev_flow[0,8,:-1,:-1],(1,0,1,0))+prev_flow[0,9,:,:]*mask_boundry
         reconstruction_from_post = torch.sum(post_flow[0,:9,:,:],dim=0)+post_flow[0,9,:,:]*mask_boundry
@@ -206,17 +198,17 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
 
         loss = loss_prev_flow+loss_post_flow+loss_prev_flow_inverse+loss_post_flow_inverse+loss_prev_consistency+loss_post_consistency
 
-        # direct loss
-        if dloss_on:
+        # penalty term L_follow
+        if on_dloss:
             loss_prev_direct = criterion(prev_flow[0,0,1:,1:], prev_flow[0,0,1:,1:])+criterion(prev_flow[0,1,1:,:], prev_flow[0,1,:-1,:])+criterion(prev_flow[0,2,1:,:-1], prev_flow[0,2,:-1,1:])+criterion(prev_flow[0,3,:,1:], prev_flow[0,3,:,:-1])+criterion(prev_flow[0,4,:,:], prev_flow[0,4,:,:])+criterion(prev_flow[0,5,:,:-1], prev_flow[0,5,:,1:])+criterion(prev_flow[0,6,:-1,1:], prev_flow[0,6,1:,:-1])+criterion(prev_flow[0,7,:-1,:], prev_flow[0,7,1:,:])+criterion(prev_flow[0,8,:-1,:-1], prev_flow[0,8,1:,1:])
             loss_post_direct = criterion(post_flow[0,0,1:,1:], post_flow[0,0,1:,1:])+criterion(post_flow[0,1,1:,:], post_flow[0,1,:-1,:])+criterion(post_flow[0,2,1:,:-1], post_flow[0,2,:-1,1:])+criterion(post_flow[0,3,:,1:], post_flow[0,3,:,:-1])+criterion(post_flow[0,4,:,:], post_flow[0,4,:,:])+criterion(post_flow[0,5,:,:-1], post_flow[0,5,:,1:])+criterion(post_flow[0,6,:-1,1:], post_flow[0,6,1:,:-1])+criterion(post_flow[0,7,:-1,:], post_flow[0,7,1:,:])+criterion(post_flow[0,8,:-1,:-1], post_flow[0,8,1:,1:])
             loss_prev_inv_direct = criterion(prev_flow_inverse[0,0,1:,1:], prev_flow_inverse[0,0,1:,1:])+criterion(prev_flow_inverse[0,1,1:,:], prev_flow_inverse[0,1,:-1,:])+criterion(prev_flow_inverse[0,2,1:,:-1], prev_flow_inverse[0,2,:-1,1:])+criterion(prev_flow_inverse[0,3,:,1:], prev_flow_inverse[0,3,:,:-1])+criterion(prev_flow_inverse[0,4,:,:], prev_flow_inverse[0,4,:,:])+criterion(prev_flow_inverse[0,5,:,:-1], prev_flow_inverse[0,5,:,1:])+criterion(prev_flow_inverse[0,6,:-1,1:], prev_flow_inverse[0,6,1:,:-1])+criterion(prev_flow_inverse[0,7,:-1,:], prev_flow_inverse[0,7,1:,:])+criterion(prev_flow_inverse[0,8,:-1,:-1], prev_flow_inverse[0,8,1:,1:])
             loss_post_inv_direct = criterion(post_flow_inverse[0,0,1:,1:], post_flow_inverse[0,0,1:,1:])+criterion(post_flow_inverse[0,1,1:,:], post_flow_inverse[0,1,:-1,:])+criterion(post_flow_inverse[0,2,1:,:-1], post_flow_inverse[0,2,:-1,1:])+criterion(post_flow_inverse[0,3,:,1:], post_flow_inverse[0,3,:,:-1])+criterion(post_flow_inverse[0,4,:,:], post_flow_inverse[0,4,:,:])+criterion(post_flow_inverse[0,5,:,:-1], post_flow_inverse[0,5,:,1:])+criterion(post_flow_inverse[0,6,:-1,1:], post_flow_inverse[0,6,1:,:-1])+criterion(post_flow_inverse[0,7,:-1,:], post_flow_inverse[0,7,1:,:])+criterion(post_flow_inverse[0,8,:-1,:-1], post_flow_inverse[0,8,1:,1:])
 
-            loss += float(args.myloss) *(loss_prev_direct + loss_post_direct + loss_prev_inv_direct + loss_post_inv_direct)
+            loss += args.penalty * (loss_prev_direct + loss_post_direct + loss_prev_inv_direct + loss_post_inv_direct)
 
         # MAE
-        overall = ((reconstruction_from_prev+reconstruction_from_prev_inverse)/2.0).type(torch.FloatTensor)
+        overall = ((reconstruction_from_prev+reconstruction_from_prev_inverse)/2.0)
         mae += abs(overall.data.sum()-target.sum())
 
         losses.update(loss.item(), img.size(0))
@@ -235,49 +227,31 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
                         .format(i, len(train_loader), batch_time=batch_time,
                          data_time=data_time, loss=losses))
 
-    mae = mae/len(train_loader)
-    print(' * Train MAE {mae:.3f} '
-              .format(mae=mae))
-    print(' * Train Loss {loss:.3f} '
-              .format(loss=losses.avg))
-    with open(os.path.join(args.savefolder, 'log.txt'), mode='a') as f:
-        f.write('Train MAE:{mae:.3f} \nTrain Loss:{loss:.3f} \n\n'
-              .format(mae=mae, loss=losses.avg))
+    mae = mae / len(train_loader)
+    logger.info('[Train MAE] {mae:.3f}'.format(mae=mae))
+    logger.info('[Train Loss] {loss:.3f} '.format(loss=losses.avg))
 
-def validate(val_list, model, criterion, device):
-    print ('begin val')
-    with open(os.path.join(args.savefolder, 'log.txt'), mode='a') as f:
-        f.write('begin val\n')
-    val_dataset = dataset_factory(val_list, args, mode="val")
-    val_loader = torch.utils.data.DataLoader(
-    val_dataset,
-    batch_size=1)
-
+def validate(args, val_loader, model, criterion, device, logger):
+    logger.info('begin val')
     model.eval()
-
     losses = AverageMeter()
     mae = 0
+
+    on_dloss = 1 if args.penalty != 0 else 0
 
     for i,(prev_img, img, post_img, target ) in enumerate(val_loader):
         # only use previous frame in inference time, as in real-time application scenario, future frame is not available
         with torch.no_grad():
-            prev_img = prev_img.to(device, dtype=torch.float)
-            prev_img = Variable(prev_img)
-
-            img = img.to(device, dtype=torch.float)
-            img = Variable(img)
-
-            post_img = post_img.to(device, dtype=torch.float)
-            post_img = Variable(post_img)
+            prev_img = prev_img.to(device)
+            img = img.to(device)
+            post_img = post_img.to(device)
+            target = target.to(device)
 
             prev_flow = model(prev_img,img)
             prev_flow_inverse = model(img,prev_img)
 
             post_flow = model(img, post_img)
             post_flow_inverse = model(post_img, img)
-
-            target = target.type(torch.FloatTensor)[0].to(device, dtype=torch.float)
-            target = Variable(target)
 
             mask_boundry = torch.zeros(prev_flow.shape[2:])
             mask_boundry[0,:] = 1.0
@@ -307,31 +281,20 @@ def validate(val_list, model, criterion, device):
 
             loss = loss_prev_flow+loss_post_flow+loss_prev_flow_inverse+loss_post_flow_inverse+loss_prev_consistency+loss_post_consistency
 
-            if dloss_on:
+            if on_dloss:
                 loss_prev_direct = criterion(prev_flow[0,0,1:,1:], prev_flow[0,0,1:,1:])+criterion(prev_flow[0,1,1:,:], prev_flow[0,1,:-1,:])+criterion(prev_flow[0,2,1:,:-1], prev_flow[0,2,:-1,1:])+criterion(prev_flow[0,3,:,1:], prev_flow[0,3,:,:-1])+criterion(prev_flow[0,4,:,:], prev_flow[0,4,:,:])+criterion(prev_flow[0,5,:,:-1], prev_flow[0,5,:,1:])+criterion(prev_flow[0,6,:-1,1:], prev_flow[0,6,1:,:-1])+criterion(prev_flow[0,7,:-1,:], prev_flow[0,7,1:,:])+criterion(prev_flow[0,8,:-1,:-1], prev_flow[0,8,1:,1:])
                 loss_post_direct = criterion(post_flow[0,0,1:,1:], post_flow[0,0,1:,1:])+criterion(post_flow[0,1,1:,:], post_flow[0,1,:-1,:])+criterion(post_flow[0,2,1:,:-1], post_flow[0,2,:-1,1:])+criterion(post_flow[0,3,:,1:], post_flow[0,3,:,:-1])+criterion(post_flow[0,4,:,:], post_flow[0,4,:,:])+criterion(post_flow[0,5,:,:-1], post_flow[0,5,:,1:])+criterion(post_flow[0,6,:-1,1:], post_flow[0,6,1:,:-1])+criterion(post_flow[0,7,:-1,:], post_flow[0,7,1:,:])+criterion(post_flow[0,8,:-1,:-1], post_flow[0,8,1:,1:])
                 loss_prev_inv_direct = criterion(prev_flow_inverse[0,0,1:,1:], prev_flow_inverse[0,0,1:,1:])+criterion(prev_flow_inverse[0,1,1:,:], prev_flow_inverse[0,1,:-1,:])+criterion(prev_flow_inverse[0,2,1:,:-1], prev_flow_inverse[0,2,:-1,1:])+criterion(prev_flow_inverse[0,3,:,1:], prev_flow_inverse[0,3,:,:-1])+criterion(prev_flow_inverse[0,4,:,:], prev_flow_inverse[0,4,:,:])+criterion(prev_flow_inverse[0,5,:,:-1], prev_flow_inverse[0,5,:,1:])+criterion(prev_flow_inverse[0,6,:-1,1:], prev_flow_inverse[0,6,1:,:-1])+criterion(prev_flow_inverse[0,7,:-1,:], prev_flow_inverse[0,7,1:,:])+criterion(prev_flow_inverse[0,8,:-1,:-1], prev_flow_inverse[0,8,1:,1:])
                 loss_post_inv_direct = criterion(post_flow_inverse[0,0,1:,1:], post_flow_inverse[0,0,1:,1:])+criterion(post_flow_inverse[0,1,1:,:], post_flow_inverse[0,1,:-1,:])+criterion(post_flow_inverse[0,2,1:,:-1], post_flow_inverse[0,2,:-1,1:])+criterion(post_flow_inverse[0,3,:,1:], post_flow_inverse[0,3,:,:-1])+criterion(post_flow_inverse[0,4,:,:], post_flow_inverse[0,4,:,:])+criterion(post_flow_inverse[0,5,:,:-1], post_flow_inverse[0,5,:,1:])+criterion(post_flow_inverse[0,6,:-1,1:], post_flow_inverse[0,6,1:,:-1])+criterion(post_flow_inverse[0,7,:-1,:], post_flow_inverse[0,7,1:,:])+criterion(post_flow_inverse[0,8,:-1,:-1], post_flow_inverse[0,8,1:,1:])
 
-                loss += float(args.myloss) *(loss_prev_direct + loss_post_direct + loss_prev_inv_direct + loss_post_inv_direct)
-
-            target = target.type(torch.FloatTensor)
+                loss += args.penalty * (loss_prev_direct + loss_post_direct + loss_prev_inv_direct + loss_post_inv_direct)
 
             losses.update(loss.item(), img.size(0))
             mae += abs(overall.data.sum()-target.sum())
 
-        del prev_img
-        del img
-        del target
-
     mae = mae/len(val_loader)
-    print(' * Val MAE {mae:.3f} '
-              .format(mae=mae))
-    print(' * Val Loss {loss:.3f} '
-              .format(loss=losses.avg))
-    with open(os.path.join(args.savefolder, 'log.txt'), mode='a') as f:
-        f.write('Val MAE:{mae:.3f} \nVal Loss:{loss:.3f} \n\n'
-              .format(mae=mae, loss=losses.avg))
+    logger.info('[Val MAE] {mae:.3f} '.format(mae=mae))
+    logger.info('[Val Loss] {loss:.3f} '.format(loss=losses.avg))
 
     return mae
 

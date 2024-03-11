@@ -57,6 +57,7 @@ def create_test_args():
 
     # misc
     parser.add_argument('--workers', default=8, type=int)
+    parser.add_argument('--prefetch', default=8, type=int)
     parser.add_argument('--seed', default=0, type=int)
 
     args = parser.parse_args()
