@@ -36,26 +36,10 @@ def main():
     logger.info("[Args]: {}".format(str(args)))
     logger.info("[Save Dir]: {}".format(save_dir))
 
-    if args.dataset == "FDST":
-        args.print_freq = 400
-        with open(args.train_json, 'r') as outfile:
-            train_list = json.load(outfile)
-        with open(args.val_json, 'r') as outfile:
-            val_list = json.load(outfile)
-    elif args.dataset == "CrowdFlow":
-        args.print_freq = 200
-        train_list = args.train_json
-        val_list = args.val_json
-    elif args.dataset == "venice":
-        args.print_freq = 10
-        train_list = args.train_json
-        val_list = args.val_json
-    elif args.dataset == "CityStreet":
-        args.print_freq = 50
-        train_list = "/groups1/gca50095/aca10350zi/CityStreet/GT_density_maps/camera_view/train/"
-        val_list = "/groups1/gca50095/aca10350zi/CityStreet/GT_density_maps/camera_view/test/"
-    else:
-        raise ValueError
+    with open(args.train_json, 'r') as outfile:
+        train_data = json.load(outfile)
+    with open(args.val_json, 'r') as outfile:
+        val_data = json.load(outfile)
 
     if not os.path.exists(args.savefolder):
         os.makedirs(args.savefolder)
@@ -72,6 +56,7 @@ def main():
     # Dataset
     train_dataset = dataset_factory(train_list, args, mode="train")
     val_dataset = dataset_factory(val_list, args, mode="val")
+    train_dataset, val_dataset = dataset_factory(args, train_data, val_data, mode="train")
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=args.batch_size,
                                                shuffle=True)

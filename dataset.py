@@ -26,23 +26,19 @@ def dataset_factory(args, train_data, val_data, mode="train"):
     if args.dataset == "FDST":
         train_dataset = FDSTDataset(
             train_data,
-            transform=transform,
-            train=True,
-            mode=args.data_mode
+            transform=transform
         )
         val_dataset = FDSTDataset(
             val_data,
-            transform=transform,
-            train=False,
-            mode=args.data_mode
+            transform=transform
         )
     elif args.dataset == "CrowdFlow":
-        train_dataset = CrowdDatasets(
+        train_dataset = CrowdFlowDataset(
             train_data,
             data_type=args.data_mode,
             transform=transform
         )
-        val_dataset = CrowdDatasets(
+        val_dataset = CrowdFlowDataset(
             val_data,
             data_type=args.data_mode,
             transform=transform
@@ -73,7 +69,7 @@ def dataset_factory(args, train_data, val_data, mode="train"):
     return train_dataset, val_dataset
 
 
-class CrowdDataset(Dataset):
+class CrowdFlowDataset(Dataset):
     def __init__(self, dict, transform, mode="once"):
         self.dict = dict
         self.transform = transform
@@ -89,25 +85,27 @@ class CrowdDataset(Dataset):
         target_path = self.dict[index]["target"]
 
         prev_img = Image.open(prev_path).convert('RGB')
+        prev_img = prev_img.resize((640, 360))
         now_img = Image.open(now_path).convert('RGB')
+        now_img = now_img.resize((640, 360))
         post_img = Image.open(post_path).convert('RGB')
+        post_img = post_img.resize((640, 360))
+
+        prev_img = self.transform(prev_img)
+        now_img = self.transform(now_img)
+        post_img = self.transform(post_img)
 
         target = np.load(target_path)["x"]
+        target = torch.from_numpy(target.astype(np.float32)).clone()
+
+        return prev_img, now_img, post_img, target
 
 
 class FDSTDataset(Dataset):
-    def __init__(self, root, shape=None, transform=None, train=False, mode="once", batch_size=1, num_workers=4):
-        if train:
-            random.shuffle(root)
-
-        self.nSamples = len(root)
-        self.lines = root
+    def __init__(self, data, transform=None):
+        self.nSamples = len(data)
+        self.lines = data
         self.transform = transform
-        self.train = train
-        self.shape = shape
-        self.mode = mode
-        self.batch_size = batch_size
-        self.num_workers = num_workers
 
     def __len__(self):
         return self.nSamples
@@ -115,9 +113,10 @@ class FDSTDataset(Dataset):
     def __getitem__(self, index):
         assert index <= len(self), 'index range error'
 
-        img_path = self.lines[index]
+        img_path = self.lines[index]["img"]
+        target_path = self.lines[index]["target"]
 
-        prev_img, img, post_img, target = load_data(img_path, self.train, self.mode)
+        prev_img, img, post_img, target = load_data(img_path, target_path)
 
         if self.transform is not None:
             prev_img = self.transform(prev_img)
@@ -126,6 +125,7 @@ class FDSTDataset(Dataset):
         return prev_img, img, post_img, target
 
 
+"""
 ras2bits = 0.71
 IP = {0: 202.5, 1: 247.5, 2: 292.5, 3: 157.5, 5: 337.5, 6: 22.5, 7: 67.5, 8: 112.5}
 
@@ -148,26 +148,6 @@ class CrowdDatasets(torch.utils.data.Dataset):
         return len(self.Pathes)
 
     def __getitem__(self, index):
-        """
-        CSV Pathlist reference
-        -------
-            train
-                index 0: input image(step t),
-                index 1: person label(step t),
-                index 2: input label(step t-1),
-                index 3: person label(step t-1),
-                index 4: label flow(step t-1 2 t),
-                index 5: input image(step t+1),
-                index 6: preson label(step t+1),
-                index 7: label flow(step t 2 t+1)
-
-            test
-                index 0: input image(step tm),
-                index 1: person label(step tm),
-                index 2: input image(step t),
-                index 3: person label(step t),
-                index 4: label flow(step tm 2 t)
-        """
         pathlist = self.Pathes[index]
         t_img_path = pathlist[0]
         t_person_path = pathlist[1]
@@ -235,19 +215,18 @@ class CrowdDatasets(torch.utils.data.Dataset):
         gt_flow_img_data = np.concatenate(gt_flow_list, axis=2)
         gt_flow_img_data /= np.max(gt_flow_img_data)
 
-        """
-        # テスト
-        traj = np.sum(gt_flow_img_data, axis=2)
-        print(traj.shape)
 
-        root = os.getcwd()
-        imgfolder = root + "/images/"
-        heatmap = cv2.resize(traj, (traj.shape[1]*8, traj.shape[0]*8))
-        heatmap = np.array(heatmap*255, dtype=np.uint8)
-        cv2.imwrite(imgfolder+"flow_test.png", heatmap)
+        # テスト
+        # traj = np.sum(gt_flow_img_data, axis=2)
+        # print(traj.shape)
+
+        # root = os.getcwd()
+        # imgfolder = root + "/images/"
+        # heatmap = cv2.resize(traj, (traj.shape[1]*8, traj.shape[0]*8))
+        # heatmap = np.array(heatmap*255, dtype=np.uint8)
+        # cv2.imwrite(imgfolder+"flow_test.png", heatmap)
         # print(gt_flow_img_data.shape)
         # print(np.max(np.sum(gt_flow_img_data, axis=2)))
-        """
 
         gt_flow_img_data = transforms.ToTensor()(gt_flow_img_data)
 
@@ -392,6 +371,7 @@ class CityStreetDataset(Dataset):
             tmp_targets = np.array(f["density_{}".format(self.data_type)])  # data_type: once or add
 
         return tmp_imgs, tmp_targets
+"""
 
 class VeniceDataset(Dataset):
     def __init__(self, pathjson=None, transform=None, width=640, height=360) -> None:

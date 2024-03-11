@@ -1,2 +1,3 @@
 exp/
 .venv/
+*.json

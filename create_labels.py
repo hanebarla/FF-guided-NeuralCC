@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import ndimage
-from tqdm import trange
 
 
 def main():
@@ -17,7 +16,7 @@ def main():
                                                  In default, path is 'E:/Dataset/TUBCrowdFlow/'
                                                  """)
     parser.add_argument('dataset', default='CrowdFlow', help='dataset name')
-    parser.add_argument('-p', '--path', default='/groups1/gca50095/aca10350zi/TUBCrowdFlow/')
+    parser.add_argument('-p', '--path', default='/home/data/TUBCrowdFlow/')
     parser.add_argument('--mode', default="once", choices=["add", "once"])
     
     args = parser.parse_args()
@@ -27,7 +26,7 @@ def main():
         create_crowdflow_json(args)
         concat_crowdflow_csv(args)
     elif args.dataset == "FDST":
-        FDSTDatasetGenerator(args.path, args.mode)
+        # FDSTDatasetGenerator(args.path, args.mode)
         create_fdst_json(args)
     elif args.dataset == "CityStreet":
         pass
@@ -204,18 +203,18 @@ def json_file_concat(file_list, file_name):
 def cross_dataset(args, train_list, val_list, test_list, concat_file_index):
     train_file_list = []
     for file_name in train_list:
-        train_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(train_file_list, os.path.join(args.savefolder, '{}_train_{}.json'.format(concat_file_index, args.mode)))
+        train_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(train_file_list, os.path.join('{}_train_{}.json'.format(concat_file_index, args.mode)))
 
     val_file_list = []
     for file_name in val_list:
-        val_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(val_file_list, os.path.join(args.savefolder, '{}_val_{}.json'.format(concat_file_index, args.mode)))
+        val_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(val_file_list, os.path.join('{}_val_{}.json'.format(concat_file_index, args.mode)))
 
     test_file_list = []
     for file_name in test_list:
-        test_file_list.append(os.path.join(args.savefolder, 'Scene_IM0{}_{}.json'.format(file_name, args.mode)))
-    json_file_concat(test_file_list, os.path.join(args.savefolder, '{}_test_{}.json'.format(concat_file_index, args.mode)))
+        test_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
+    json_file_concat(test_file_list, os.path.join('{}_test_{}.json'.format(concat_file_index, args.mode)))
 
 def concat_crowdflow_csv(args):
     A_train_dataset = [1, 2, 3]
@@ -256,7 +255,7 @@ def FDSTDatasetGenerator(root, mode="once"):
         if os.path.isdir(os.path.join(test_dir, f)):
             test_path.append(os.path.join(test_dir, f))
     path_sets = train_path + test_path
-            
+
     img_paths = []
     for p in path_sets:
         for img_path in glob.glob(os.path.join(p, '*.jpg')):
@@ -284,11 +283,11 @@ def FDSTDatasetGenerator(root, mode="once"):
                 k[y_anno, x_anno] = 1
             else:
                 raise NotImplementedError("mode should be 'add' or 'once'")
-            
+
         k = ndimage.filters.gaussian_filter(k, 3)
 
         save_path = img_path.replace('.jpg', '_{}.npz'.format(mode))
-        np.savez_compressed(save_path, density=k)
+        np.savez_compressed(save_path, x=k)
 
 def create_fdst_json(args):
     train_dir = os.path.join(args.path, 'train_data')
@@ -304,18 +303,25 @@ def create_fdst_json(args):
 
     train_output_path_dict = []
     test_output_path_dict = []
+    train_output_path_dict_per_scene = {}
+    test_output_path_dict_per_scene = {}
+
     staticff = None
     for scene in train_scene:
-        img_paths = os.listdir(os.path.join(train_dir, scene))
+        img_paths = os.listdir(os.path.join(train_dir, str(scene)))
+        img_paths = [img_path for img_path in img_paths if "."!=img_path[0]]
         img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1] == 'jpg']
-        img_paths = [os.path.join(train_dir, scene, img_path) for img_path in img_paths]
+        img_paths = [os.path.join(train_dir, str(scene), img_path) for img_path in img_paths]
         img_paths.sort()
 
         for img_path in img_paths:
             gt_path = img_path.replace('.jpg', '_{}.npz'.format(args.mode))
             train_output_path_dict.append({'img': img_path, 'gt': gt_path})
-
-            target = np.load(gt_path)['density']
+            if scene not in train_output_path_dict_per_scene:
+                train_output_path_dict_per_scene[scene] = [{'img': img_path, 'gt': gt_path}]
+            else:
+                train_output_path_dict_per_scene[scene].append({'img': img_path, 'gt': gt_path})
+            target = np.load(gt_path)['x']
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
             target = ndimage.gaussian_filter(target, 3)
 
@@ -325,20 +331,25 @@ def create_fdst_json(args):
                 staticff += target
         
         staticff[staticff>1] = 1.0
-        staticff_path = os.path.join(train_dir, scene, 'staticff_45x80.npz')
+        staticff_path = os.path.join(train_dir, str(scene), 'staticff_45x80.npz')
         np.savez_compressed(staticff_path, x=staticff)
 
     for scene in test_scene:
-        img_paths = os.listdir(os.path.join(test_dir, scene))
+        img_paths = os.listdir(os.path.join(test_dir, str(scene)))
+        img_paths = [img_path for img_path in img_paths if "."!=img_path[0]]
         img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1] == 'jpg']
-        img_paths = [os.path.join(test_dir, scene, img_path) for img_path in img_paths]
+        img_paths = [os.path.join(test_dir, str(scene), img_path) for img_path in img_paths]
         img_paths.sort()
 
         for img_path in img_paths:
             gt_path = img_path.replace('.jpg', '_{}.npz'.format(args.mode))
             test_output_path_dict.append({'img': img_path, 'gt': gt_path})
+            if scene not in test_output_path_dict_per_scene:
+                test_output_path_dict_per_scene[scene] = [{'img': img_path, 'gt': gt_path}]
+            else:
+                test_output_path_dict_per_scene[scene].append({'img': img_path, 'gt': gt_path})
 
-            target = np.load(gt_path)['density']
+            target = np.load(gt_path)['x']
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
             target = ndimage.gaussian_filter(target, 3)
 
@@ -348,13 +359,17 @@ def create_fdst_json(args):
                 staticff += target
         
         staticff[staticff>1] = 1.0
-        staticff_path = os.path.join(test_dir, scene, 'staticff_45x80.npz')
+        staticff_path = os.path.join(test_dir, str(scene), 'staticff_45x80.npz')
         np.savez_compressed(staticff_path, x=staticff)
     
-    with open(os.path.join(args.path, 'fdst_train.json'), 'w') as f:
+    with open(os.path.join('fdst_train.json'), 'w') as f:
         json.dump(train_output_path_dict, f)
-    with open(os.path.join(args.path, 'fdst_test.json'), 'w') as f:
+    with open(os.path.join('fdst_test.json'), 'w') as f:
         json.dump(test_output_path_dict, f)
+    with open(os.path.join('fdst_train_per_scene.json'), 'w') as f:
+        json.dump(train_output_path_dict_per_scene, f)
+    with open(os.path.join('fdst_test_per_scene.json'), 'w') as f:
+        json.dump(test_output_path_dict_per_scene, f)
 
 if __name__ == "__main__":
     main()

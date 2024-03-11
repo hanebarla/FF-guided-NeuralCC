@@ -30,7 +30,7 @@ def create_train_args():
 
     # misc
     parser.add_argument('--start_epoch', default=0, type=int)
-    parser.add_argument('--print_freq', default=10, type=int)
+    parser.add_argument('--print_freq', default=50, type=int)
     parser.add_argument('--workers', default=8, type=int)
     parser.add_argument('--seed', default=0, type=int)
 

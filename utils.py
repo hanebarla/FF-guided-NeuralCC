@@ -13,7 +13,8 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar', bestname='mod
     if is_best:
         shutil.copyfile(filename, bestname)
 
-def load_data(img_path, train=True, mode="once"):
+# def load_data(img_path, train=True, mode="once"):
+def load_data(img_path, target_path):
     img_folder = os.path.dirname(img_path)
     img_name = os.path.basename(img_path)
     if '(1)' in img_name:
@@ -29,14 +30,6 @@ def load_data(img_path, train=True, mode="once"):
     prev_img_path = os.path.join(img_folder, '%03d.jpg' % (prev_index))
     post_img_path = os.path.join(img_folder, '%03d.jpg' % (post_index))
 
-    if mode == "once":
-        gt_path = img_path.replace('.jpg', '_resize.h5')
-    elif mode == "add":
-        gt_path = img_path.replace('.jpg', '_resize_add.h5')
-    else:
-        raise ValueError
-    gt_path = img_path.replace('.jpg', '_resize')
-
     prev_img = Image.open(prev_img_path).convert('RGB')
     img = Image.open(img_path).convert('RGB')
     post_img = Image.open(post_img_path).convert('RGB')
@@ -46,9 +39,7 @@ def load_data(img_path, train=True, mode="once"):
     img = img.resize((640, 360))
     post_img = post_img.resize((640, 360))
 
-    gt_file = h5py.File(gt_path)
-    target = np.asarray(gt_file['density'])
-    gt_file.close()
+    target = np.load(target_path)['x']
     target = cv2.resize(target,
                         (int(target.shape[1] / 8),
                          int(target.shape[0] / 8)),
