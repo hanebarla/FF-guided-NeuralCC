@@ -278,6 +278,7 @@ class CrowdDatasets(torch.utils.data.Dataset):
         # print("intpu min: {}".format(torch.min(input_img)))
 
         return input_img, mask_img
+"""
 
 class CityStreetDataset(Dataset):
     def __init__(self, data_dir, data_type, transform=None, scene=None):
@@ -371,7 +372,6 @@ class CityStreetDataset(Dataset):
             tmp_targets = np.array(f["density_{}".format(self.data_type)])  # data_type: once or add
 
         return tmp_imgs, tmp_targets
-"""
 
 class VeniceDataset(Dataset):
     def __init__(self, pathjson=None, transform=None, width=640, height=360) -> None:

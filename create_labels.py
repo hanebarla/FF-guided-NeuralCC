@@ -22,11 +22,11 @@ def main():
     args = parser.parse_args()
 
     if args.dataset == "CrowdFlow":
-        CrowdFlowDatasetGenerator(args.path, args.mode)
+        # CrowdFlowDatasetGenerator(args.path, args.mode)
         create_crowdflow_json(args)
         concat_crowdflow_csv(args)
     elif args.dataset == "FDST":
-        # FDSTDatasetGenerator(args.path, args.mode)
+        FDSTDatasetGenerator(args.path, args.mode)
         create_fdst_json(args)
     elif args.dataset == "CityStreet":
         pass
@@ -190,15 +190,16 @@ def create_crowdflow_json(args):
             tmpPathList.append(PathList_per_frame)
 
         with open("Scene_{}_{}.json".format(scene.replace("/", ""), args.mode), "w") as f:
-            json.dump(tmpPathList, f)
+            json.dump({scene[3:-1]: tmpPathList}, f)
 
 def json_file_concat(file_list, file_name):
-    file_data_list = []
+    file_data_dict = {}
     for file in file_list:
         with open(file, mode="r") as f:
-            file_data_list += json.load(f)
+            tmp_dict = json.load(f)
+            file_data_dict.update(tmp_dict)
     with open(file_name, 'w') as f:
-        json.dump(file_data_list, f)
+        json.dump(file_data_dict, f)
 
 def cross_dataset(args, train_list, val_list, test_list, concat_file_index):
     train_file_list = []

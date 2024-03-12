@@ -30,28 +30,34 @@ def optimizer_factory(model, args):
 
 def main():
     args = create_train_args()
-    save_dir = os.path.join(args.exp, args.dataset, args.data_mode, args.penalty)
+
+    # get data mode
+    conditions = args.train_data.split('_')
+    data_mode = conditions[1]
+    args.mode = data_mode
+
+    # get save dir
+    save_dir = os.path.join(args.exp, args.dataset, "{}_{}".format(data_mode, args.penalty))
 
     logger = create_logger(save_dir, 'train', 'train.log')
     logger.info("[Args]: {}".format(str(args)))
     logger.info("[Save Dir]: {}".format(save_dir))
 
-    with open(args.train_json, 'r') as outfile:
+    with open(args.train_data, 'r') as outfile:
         train_data = json.load(outfile)
-    with open(args.val_json, 'r') as outfile:
+    with open(args.val_data, 'r') as outfile:
         val_data = json.load(outfile)
-    
-    if args.dataset != "crowdflow":
-        new_train_data = []
-        new_val_data = []
-        for data in train_data.values():
-            new_train_data.extend(data)
-        for data in val_data.values():
-            new_val_data.extend(data)
 
-    if not os.path.exists(args.savefolder):
-        os.makedirs(args.savefolder)
-    print(args.savefolder)
+    new_train_data = []
+    new_val_data = []
+    for data in train_data.values():
+        new_train_data.extend(data)
+    for data in val_data.values():
+        new_val_data.extend(data)
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    logger.info(save_dir)
 
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -65,9 +71,16 @@ def main():
     train_dataset, val_dataset = dataset_factory(args, train_data, val_data, mode="train")
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=args.batch_size,
-                                               shuffle=True)
+                                               shuffle=True,
+                                               num_workers=args.workers,
+                                               prefetch_factor=args.prefetch,
+                                               pin_memory=True)
     val_loader = torch.utils.data.DataLoader(val_dataset,
-                                             batch_size=args.batch_size)
+                                             batch_size=args.batch_size,
+                                             shuffle=False,
+                                             num_workers=args.workers,
+                                             prefetch_factor=args.prefetch,
+                                             pin_memory=True)
 
     # Model
     if args.bn != 0 or args.do_rate > 0.0:
@@ -83,9 +96,9 @@ def main():
     best_prec1 = 100
 
     # Train resume
-    if os.path.isfile(os.path.join(save_dir, 'checkpoint.pth.tar')):
-        checkpoint = torch.load(os.path.join(save_dir, 'checkpoint.pth.tar'))
-        modelbest = torch.load(os.path.join(save_dir, 'model_best.pth.tar'))
+    if os.path.isfile(os.path.join(save_dir, 'checkpoint.pth')):
+        checkpoint = torch.load(os.path.join(save_dir, 'checkpoint.pth'))
+        modelbest = torch.load(os.path.join(save_dir, 'model_best.pth'))
         model.load_state_dict(checkpoint['state_dict'])
         args.start_epoch = checkpoint['epoch']
         best_prec1 = modelbest['val']
@@ -118,7 +131,7 @@ def main():
         train_time += epoch_time
 
         # evaluate on validation set
-        prec1 = validate(val_list, model, criterion, device)
+        prec1 = validate(val_data, model, criterion, device)
 
         is_best = prec1 < best_prec1
         best_prec1 = min(prec1, best_prec1)
@@ -130,8 +143,8 @@ def main():
             'epoch': epoch,
             'time': train_time
         }, is_best,
-            filename=os.path.join(args.savefolder, 'checkpoint.pth.tar'),
-            bestname=os.path.join(args.savefolder, 'model_best.pth.tar'))
+            filename=os.path.join(save_dir, 'checkpoint.pth'),
+            bestname=os.path.join(save_dir, 'model_best.pth'))
 
 
 def train_epoch(args, train_loader, model, criterion, optimizer, device, logger):

@@ -9,7 +9,6 @@ def create_train_args():
     parser.add_argument('train_data', help='path to train json')
     parser.add_argument('val_data', metavar='VAL', help='path to val json')
     parser.add_argument('--dataset', default="FDST")
-    parser.add_argument('--exp', default='./exp/')
     parser.add_argument('--mode', default='once', choices=["add", "once"])  # once or add
     parser.add_argument('--batch_size', default=1, type=int)
 
@@ -33,6 +32,7 @@ def create_train_args():
     parser.add_argument('--print_freq', default=50, type=int)
     parser.add_argument('--workers', default=8, type=int)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--exp', default='./exp/')
 
     args = parser.parse_args()
 
@@ -44,12 +44,14 @@ def create_test_args():
     # data settings
     parser.add_argument('test_data', help='path to test json')
     parser.add_argument('--dataset', default="FDST")
-    parser.add_argument('--exp', default='./exp/')
     parser.add_argument('--mode', default='once', choices=["add", "once"])  # once or add
     parser.add_argument('--batch_size', default=1, type=int)
 
     # load weights
-    parser.add_argument('--saved_dir', default="/path/to/saved_dir")
+    parser.add_argument('saved_dir', default="/path/to/saved_dir")
+    
+    # tune setting
+    parser.add_argument('--pix', default=0, type=int)
 
     # floor-field settings
     parser.add_argument('--staticff', default=0, type=int)

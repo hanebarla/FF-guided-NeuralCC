@@ -1,5 +1,6 @@
 import os
 import shutil
+from collections import OrderedDict
 
 import torch
 import numpy as np
@@ -12,6 +13,15 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar', bestname='mod
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, bestname)
+
+def fix_model_state_dict(state_dict):
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k
+        if name.startswith('module.'):
+            name = name[7:]  # remove 'module.' of dataparallel
+        new_state_dict[name] = v
+    return new_state_dict
 
 # def load_data(img_path, train=True, mode="once"):
 def load_data(img_path, target_path):
