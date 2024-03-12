@@ -48,10 +48,11 @@ def create_test_args():
     parser.add_argument('--batch_size', default=1, type=int)
 
     # load weights
-    parser.add_argument('saved_dir', default="/path/to/saved_dir")
-    
+    parser.add_argument('--saved_dir', default="/path/to/saved_dir")
+
     # tune setting
     parser.add_argument('--pix', default=0, type=int)
+    parser.add_argument('--scene_num', default=50, type=int)
 
     # floor-field settings
     parser.add_argument('--staticff', default=0, type=int)

@@ -17,7 +17,7 @@ import scipy.io
 from scipy.ndimage.filters import gaussian_filter
 
 
-def dataset_factory(args, train_data, val_data, mode="train"):
+def dataset_factory(args, train_data, val_data):
     transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize(
                                         mean=[0.485, 0.456, 0.406],

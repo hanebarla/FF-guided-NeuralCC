@@ -1,13 +1,9 @@
 import csv
 import os
-import time
-import pickle
 import json
-
 
 import torch
 from torch import nn
-from torch.autograd import Variable
 from torchvision import datasets, models, transforms
 import torch.nn.functional as F
 import numpy as np
@@ -20,101 +16,8 @@ from model import CANNet2s
 from utils import save_checkpoint, fix_model_state_dict
 from argument import create_test_args, load_args
 from logger import create_logger
+from dataset import dataset_factory
 
-
-def dataset_factory(dlist, arguments, mode="train", scene=None, add=False):
-    if arguments.dataset == "FDST":
-        if mode == "train":
-            return dataset.listDataset(
-                dlist,
-                shuffle=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    ),
-                ]),
-                train=True,
-                batch_size=args.batch_size,
-                num_workers=args.workers
-            )
-        else:
-            return dataset.listDataset(
-                dlist,
-                shuffle=False,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225]
-                    ),
-                ]),
-                train=False
-            )
-    elif arguments.dataset == "CrowdFlow":
-        return dataset.CrowdDatasets(
-            dlist,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                ),
-            ]),
-            add=add
-            )
-    elif arguments.dataset == "venice":
-        return dataset.VeniceDataset(
-            dlist,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                ),
-            ])
-        )
-    elif arguments.dataset == "points":
-        return dataset.PointsDataset(
-            dlist,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                )
-            ])
-        )
-    elif arguments.dataset == "CityStreet":
-         if mode == "train":
-             return dataset.CityStreetDataset(
-                 dlist,
-                 data_type=arguments.data_mode,
-                 transform=transforms.Compose([
-                     transforms.ToTensor(),
-                     transforms.Normalize(
-                         mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]
-                     )
-                 ]),
-                 scene=scene
-             )
-         else:
-             return dataset.CityStreetDataset(
-                 dlist,
-                 data_type=arguments.data_mode,
-                 transform=transforms.Compose([
-                     transforms.ToTensor(),
-                     transforms.Normalize(
-                         mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]
-                     )
-                 ]),
-                 scene=scene
-             )
-    else:
-        raise ValueError
 
 def main():
     test_args = create_test_args()
@@ -139,10 +42,6 @@ def main():
     logger.info("[Train Args]: {}".format(str(args)))
     logger.info("[Save Dir]: {}".format(save_dir))
 
-    static_param, temperature_param, beta_param, delta_param = None, None, None, None
-    if subdir != 'baseline':
-        static_param, temperature_param, beta_param, delta_param = get_param(test_args, save_dir)
-
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: {}".format(device))
@@ -164,13 +63,17 @@ def main():
 
     # validate per scene
     for k in test_data.keys():
-        _, test_dataset = dataset_factory(args, None, test_data[k], mode="train")
+        # dataloader
+        _, test_dataset = dataset_factory(args, None, test_data[k])
         test_dataloader = torch.utils.data.DataLoader(test_dataset,
                                                        batch_size=args.batch_size,
                                                        num_workers=args.workers,
                                                        prefetch=args.prefetch,
                                                        pin_memory=True,
                                                        shuffle=False)
+
+        # load parameters
+        static_param, temperature_param, beta_param, delta_param = get_param(test_args, subdir)
 
         # create result csv file per scene
         save_dir_scene = os.path.join(save_dir, str(k))
@@ -188,7 +91,7 @@ def main():
 
         # validate
         results = validate(test_args, test_dataloader, model, staticff, device,
-                           baseline_dir=baseline_dir, subdir=save_dir_scene, tested_num=0,
+                           baseline_dir=baseline_dir, subdir=save_dir_scene, tested_num=test_args.scene_num,
                            static_param=static_param, temperature_param=temperature_param,
                            beta_param=beta_param, delta_param=delta_param)
         logger.info("[Scene {}] MAE: {:.3f}, RMSE: {:.3f}, pix MAE: {:.5f}, pix RMSE: {:.5f}"
