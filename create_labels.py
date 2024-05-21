@@ -21,9 +21,13 @@ def main():
     
     args = parser.parse_args()
 
+    print("Dataset: {}, Mode: {}".format(args.dataset, args.mode))
     if args.dataset == "CrowdFlow":
-        # CrowdFlowDatasetGenerator(args.path, args.mode)
+        print("CrowdFlowDatasetGenerator")
+        CrowdFlowDatasetGenerator(args.path, args.mode)
+        print("create_crowdflow_json")
         create_crowdflow_json(args)
+        print("concat_crowdflow_csv")
         concat_crowdflow_csv(args)
     elif args.dataset == "FDST":
         FDSTDatasetGenerator(args.path, args.mode)
@@ -44,9 +48,11 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
     """
     anno = np.zeros((720, 1280))
     anno_input_same = np.zeros((360, 640))
-    anno_input_half = np.zeros((180, 320))
-    anno_input_quarter = np.zeros((90, 160))
-    anno_input_eighth = np.zeros((45, 80))
+    # anno_input_half = np.zeros((180, 320))
+    # anno_input_quarter = np.zeros((90, 160))
+    # anno_input_eighth = np.zeros((45, 80))
+    rate_h = anno.shape[0] / anno_input_same.shape[0]
+    rate_w = anno.shape[1] / anno_input_same.shape[1]
 
     frame_per_pos = np.array(
         person_pos[:, 2 * frame: 2 * (frame + 1)], dtype=np.uint32)
@@ -62,26 +68,23 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
             continue
         anno[pos[0], pos[1]] = 1.0
 
+        # print(pos[0], rate_h, pos[1], rate_w)
+        y_anno = min(int(pos[0]/rate_h), 359)
+        x_anno = min(int(pos[1]/rate_w), 639)
         if mode == "add":
-            anno_input_same[int(pos[0]/2), int(pos[1]/2)] += 1.0
-            anno_input_half[int(pos[0]/4), int(pos[1]/4)] += 1.0
-            anno_input_quarter[int(pos[0]/8), int(pos[1]/8)] += 1.0
-            anno_input_eighth[int(pos[0]/16), int(pos[1]/16)] += 1.0
+            anno_input_same[y_anno, x_anno] += 1.0
         elif mode == "once":
-            anno_input_same[int(pos[0]/2), int(pos[1]/2)] = 1.0
-            anno_input_half[int(pos[0]/4), int(pos[1]/4)] = 1.0
-            anno_input_quarter[int(pos[0]/8), int(pos[1]/8)] = 1.0
-            anno_input_eighth[int(pos[0]/16), int(pos[1]/16)] = 1.0
+            anno_input_same[y_anno, x_anno] = 1.0
         else:
-            raise ValueError
+            raise NotImplementedError("mode should be 'add' or 'once'")
 
     anno = ndimage.filters.gaussian_filter(anno, 3)
     anno_input_same = ndimage.filters.gaussian_filter(anno_input_same, 3)
-    anno_input_half = ndimage.filters.gaussian_filter(anno_input_half, 3)
-    anno_input_quarter = ndimage.filters.gaussian_filter(anno_input_quarter, 3)
-    anno_input_eighth = ndimage.filters.gaussian_filter(anno_input_eighth, 3)
+    anno_input_eighth = cv2.resize(anno_input_same,
+                                   (int(anno_input_same.shape[1]/8), int(anno_input_same.shape[0]/8)),
+                                   interpolation=cv2.INTER_CUBIC)*64
 
-    return anno, anno_input_same, anno_input_half, anno_input_quarter, anno_input_eighth
+    return anno, anno_input_same, anno_input_eighth
 
 
 def CrowdFlowDatasetGenerator(root, mode="once"):
@@ -89,14 +92,12 @@ def CrowdFlowDatasetGenerator(root, mode="once"):
     FFdataset_path = os.path.join(root, "ff_{}".format(mode))
     if not os.path.isdir(FFdataset_path):
         os.mkdir(FFdataset_path)
-    
+
     for i in range(5):
         scene = "IM0{}".format(i+1)
 
         staticff_label = np.zeros((720, 1280))
         staticff_label_360x640 = np.zeros((360, 640))
-        staticff_label_180x320 = np.zeros((180, 320))
-        staticff_label_90x160 = np.zeros((90, 160))
         staticff_label_45x80 = np.zeros((45, 80))
 
         scene_pos = np.loadtxt(
@@ -115,27 +116,18 @@ def CrowdFlowDatasetGenerator(root, mode="once"):
             os.makedirs(os.path.join(FFdataset_path, scene), exist_ok=True)
 
         for fr in range(frame_num):
-            anno, anno_input_same, anno_input_half, anno_input_quarter, anno_input_eighth = person_annotate_img_generator(scene_pos, fr)
+            anno, anno_input_same, anno_input_eighth = person_annotate_img_generator(scene_pos, fr)
             staticff_label += anno
             staticff_label_360x640 += anno_input_same
-            staticff_label_180x320 += anno_input_half
-            staticff_label_90x160 += anno_input_quarter
-            staticff_label_45x80 += anno_input_eighth
             np.savez_compressed(os.path.join(FFdataset_path, scene, "{}.npz".format(fr)), x=anno)
             np.savez_compressed(os.path.join(FFdataset_path, scene, "{}_360x640.npz".format(fr)), x=anno_input_same)
-            np.savez_compressed(os.path.join(FFdataset_path, scene, "{}_180x320.npz".format(fr)), x=anno_input_half)
-            np.savez_compressed(os.path.join(FFdataset_path, scene, "{}_90x160.npz".format(fr)), x=anno_input_quarter)
             np.savez_compressed(os.path.join(FFdataset_path, scene, "{}_45x80.npz".format(fr)), x=anno_input_eighth)
 
         staticff_label[staticff_label>1] = 1.0
         staticff_label_360x640[staticff_label_360x640>1] = 1.0
-        staticff_label_180x320[staticff_label_180x320>1] = 1.0
-        staticff_label_90x160[staticff_label_90x160>1] = 1.0
         staticff_label_45x80[staticff_label_45x80>1] = 1.0
         np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_720x1280.npz"), x=staticff_label)
         np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_360x640.npz"), x=staticff_label_360x640)
-        np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_180x320.npz"), x=staticff_label_180x320)
-        np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_90x160.npz"), x=staticff_label_90x160)
         np.savez_compressed(os.path.join(FFdataset_path, scene, "staticff_45x80.npz"), x=staticff_label_45x80)
 
 def create_crowdflow_json(args):
@@ -226,25 +218,25 @@ def concat_crowdflow_csv(args):
     A_test_dataset = [5]
     cross_dataset(args, A_train_dataset, A_val_dataset, A_test_dataset, 'A')
 
-    # B_train_dataset = [2, 3, 4]
-    # B_val_dataset = [5]
-    # B_test_dataset = [1]
-    # cross_dataset(args, B_train_dataset, B_val_dataset, B_test_dataset, 'B')
+    B_train_dataset = [2, 3, 4]
+    B_val_dataset = [5]
+    B_test_dataset = [1]
+    cross_dataset(args, B_train_dataset, B_val_dataset, B_test_dataset, 'B')
 
-    # C_train_dataset = [3, 4, 5]
-    # C_val_dataset = [1]
-    # C_test_dataset = [2]
-    # cross_dataset(args, C_train_dataset, C_val_dataset, C_test_dataset, 'C')
+    C_train_dataset = [3, 4, 5]
+    C_val_dataset = [1]
+    C_test_dataset = [2]
+    cross_dataset(args, C_train_dataset, C_val_dataset, C_test_dataset, 'C')
 
-    # D_train_dataset = [4, 5, 1]
-    # D_val_dataset = [2]
-    # D_test_dataset = [3]
-    # cross_dataset(args, D_train_dataset, D_val_dataset, D_test_dataset, 'D')
+    D_train_dataset = [4, 5, 1]
+    D_val_dataset = [2]
+    D_test_dataset = [3]
+    cross_dataset(args, D_train_dataset, D_val_dataset, D_test_dataset, 'D')
 
-    # E_train_dataset = [5, 1, 2]
-    # E_val_dataset = [3]
-    # E_test_dataset = [4]
-    # cross_dataset(args, E_train_dataset, E_val_dataset, E_test_dataset, 'E')
+    E_train_dataset = [5, 1, 2]
+    E_val_dataset = [3]
+    E_test_dataset = [4]
+    cross_dataset(args, E_train_dataset, E_val_dataset, E_test_dataset, 'E')
 
 def FDSTDatasetGenerator(root, mode="once"):
     train_dir = os.path.join(root, 'train_data')
@@ -296,7 +288,7 @@ def FDSTDatasetGenerator(root, mode="once"):
 def create_fdst_json(args):
     train_dir = os.path.join(args.path, 'train_data')
     test_dir = os.path.join(args.path, 'test_data')
-    
+
     train_scene = []
     test_scene = []
     for i in range(100):
@@ -333,7 +325,7 @@ def create_fdst_json(args):
                 staticff = target
             else:
                 staticff += target
-        
+
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(train_dir, str(scene), 'staticff_45x80.npz')
         np.savez_compressed(staticff_path, x=staticff)
