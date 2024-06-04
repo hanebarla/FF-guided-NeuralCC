@@ -7,7 +7,7 @@ import argparse
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy import ndimage
+from scipy import ndimage, io
 
 
 def main():
@@ -36,6 +36,8 @@ def main():
         pass
     elif args.dataset == "venice":
         pass
+    elif args.dataset == "ucsd":
+        UCSDDatasetGenerator(args.path, args.mode)
     else:
         raise NotImplementedError("Dataset {} is not supported.".format(args.dataset))
     
@@ -370,6 +372,107 @@ def create_fdst_json(args):
     #     json.dump(train_output_path_dict_per_scene, f)
     # with open(os.path.join('fdst_{}_test_per_scene.json'.format(args.mode)), 'w') as f:
     #     json.dump(test_output_path_dict_per_scene, f)
+
+def UCSDDatasetGenerator(root, mode="once"):
+    # root: /groups1/gca50095/aca10350zi/ucsdpeds
+    # train: 003 ~ 006
+    # test: 000 ~ 002, 007 ~ 009
+    train_scene_nums = [3, 4, 5, 6]
+    test_scene_nums = [0, 1, 2, 7, 8, 9]
+    train_dir = os.path.join(root, 'vidf')
+
+    for scene_num in train_scene_nums:
+        scene_dir = os.path.join(train_dir, 'vidf1_33_00{}.y'.format(scene_num))
+        target_file = os.path.join(root, "vidf-cvpr", 'vidf1_33_00{}_people_full.mat'.format(scene_num))
+        mat_data = io.loadmat(target_file, squeeze_me=True)
+        print(type(mat_data["people"][3]))
+        # for p in range(mat_data["people"].shape[0]):
+        #     tmp_data = mat_data["people"][p].tolist()  # 0: id, 1: scene, 2: loc, 3: num_pts, 4: ldir, 5: tdir
+        #     for tmp in tmp_data[2]:
+        #         print(tmp)
+                # if tmp[0] < 0 or tmp[1] < 0:
+                    # print("minus position")
+                    # print(tmp)
+            # print(tmp_data[2])
+
+        for i in range(200):
+            img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
+            print(img_path)
+            img = cv2.imread(img_path)
+            target = np.zeros_like(img, dtype=np.float32)
+            max_w, max_h = img.shape[1], img.shape[0]
+            print(img.shape)
+
+            for p in range(mat_data["people"].shape[0]):
+                # print("person: ", p)
+                tmp_data = mat_data["people"][p].tolist()
+                for tmp in tmp_data[2]:
+                    if tmp[0] < 0 or tmp[1] < 0:
+                        # print("minus position")
+                        continue
+                    elif tmp[0] >= max_w or tmp[1] >= max_h:
+                        # print("over position")
+                        continue
+                    elif tmp[-1] != i+1:
+                        # print("frame mismatch")
+                        continue
+                    print(tmp)
+                    if mode == "once":
+                        target[int(tmp[1]), int(tmp[0])] = 1.0
+                    elif mode == "add":
+                        target[int(tmp[1]), int(tmp[0])] += 1.0
+                    else:
+                        raise NotImplementedError("mode should be 'add' or 'once'")
+
+            target = ndimage.gaussian_filter(target, 3)
+            target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            # print(target.max())
+
+            target_file = img_path.replace('.png', '_{}.npz'.format(mode))
+            target_img_path = img_path.replace('.png', '_target.png')
+            cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
+            np.savez_compressed(target_file, x=target)
+
+    for scene_num in test_scene_nums:
+        scene_dir = os.path.join(train_dir, 'vidf1_33_00{}.y'.format(scene_num))
+        target_file = os.path.join(root, "vidf-cvpr", 'vidf1_33_00{}_people_full.mat'.format(scene_num))
+        mat_data = io.loadmat(target_file, squeeze_me=True)
+
+        for i in range(200):
+            img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
+            print(img_path)
+            img = cv2.imread(img_path)
+            target = np.zeros_like(img, dtype=np.float32)
+            max_w, max_h = img.shape[1], img.shape[0]
+
+            for p in range(mat_data["people"].shape[0]):
+                # print("person: ", p)
+                tmp_data = mat_data["people"][p].tolist()
+                for tmp in tmp_data[2]:
+                    if tmp[0] < 0 or tmp[1] < 0:
+                        # print("minus position")
+                        continue
+                    elif tmp[0] >= max_w or tmp[1] >= max_h:
+                        # print("over position")
+                        continue
+                    elif tmp[-1] != i+1:
+                        # print("frame mismatch")
+                        continue
+                    print(tmp)
+                    if mode == "once":
+                        target[int(tmp[1]), int(tmp[0])] = 1.0
+                    elif mode == "add":
+                        target[int(tmp[1]), int(tmp[0])] += 1.0
+                    else:
+                        raise NotImplementedError("mode should be 'add' or 'once'")
+
+            target = ndimage.gaussian_filter(target, 3)
+            target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+
+            target_file = img_path.replace('.png', '_{}.npz'.format(mode))
+            target_img_path = img_path.replace('.png', '_target.png')
+            cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
+            np.savez_compressed(target_file, x=target)
 
 if __name__ == "__main__":
     main()
