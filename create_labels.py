@@ -37,7 +37,8 @@ def main():
     elif args.dataset == "venice":
         pass
     elif args.dataset == "ucsd":
-        UCSDDatasetGenerator(args.path, args.mode)
+        # UCSDDatasetGenerator(args.path, args.mode)
+        create_ucsd_json(args)
     else:
         raise NotImplementedError("Dataset {} is not supported.".format(args.dataset))
     
@@ -441,6 +442,7 @@ def UCSDDatasetGenerator(root, mode="once"):
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
         np.savez_compressed(staticff_path, x=staticff)
+        cv2.imwrite(os.path.join(scene_dir, 'staticff.png'), np.array(staticff/staticff.max()*255, dtype=np.uint8))
 
     for scene_num in test_scene_nums:
         scene_dir = os.path.join(train_dir, 'vidf1_33_00{}.y'.format(scene_num))
@@ -491,6 +493,66 @@ def UCSDDatasetGenerator(root, mode="once"):
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
         np.savez_compressed(staticff_path, x=staticff)
+        cv2.imwrite(os.path.join(scene_dir, 'staticff.png'), np.array(staticff/staticff.max()*255, dtype=np.uint8))
+
+def create_ucsd_json(args):
+    train_scene_nums = [3, 4, 5, 6]
+    test_scene_nums = [0, 1, 2, 7, 8, 9]
+    root_dir = os.path.join(args.path, 'vidf')
+
+    train_output_path_dict = []
+    test_output_path_dict = []
+    train_output_path_dict_per_scene = {}
+    test_output_path_dict_per_scene = {}
+
+    for scene in train_scene_nums:
+        img_paths = os.listdir(os.path.join(root_dir, "vidf1_33_00{}.y".format(scene)))
+        img_paths = [img_path for img_path in img_paths if "."!=img_path[0]]
+        img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1] == 'png']
+        img_paths = [img_path for img_path in img_paths if img_path.split('_')[-1] != 'target.png']
+        img_paths = [img_path for img_path in img_paths if img_path.split('_')[-1] != 'staticff.png']
+        img_paths = [os.path.join(root_dir, "vidf1_33_00{}.y".format(scene), img_path) for img_path in img_paths]
+        img_paths.sort()
+        print(img_paths)
+
+        for img_path in img_paths:
+            gt_path = img_path.replace('.png', '_{}.npz'.format(args.mode))
+            train_output_path_dict.append({'img': img_path, 'gt': gt_path})
+            if scene not in train_output_path_dict_per_scene:
+                train_output_path_dict_per_scene[scene] = [{'img': img_path, 'gt': gt_path}]
+            else:
+                train_output_path_dict_per_scene[scene].append({'img': img_path, 'gt': gt_path})
+
+    for scene in test_scene_nums:
+        img_paths = os.listdir(os.path.join(root_dir, "vidf1_33_00{}.y".format(scene)))
+        img_paths = [img_path for img_path in img_paths if "."!=img_path[0]]
+        img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1] == 'png']
+        img_paths = [img_path for img_path in img_paths if img_path.split('_')[-1] != 'target.png']
+        img_paths = [img_path for img_path in img_paths if img_path.split('_')[-1] != 'staticff.png']
+        img_paths = [os.path.join(root_dir, "vidf1_33_00{}.y".format(scene), img_path) for img_path in img_paths]
+        img_paths.sort()
+        print(img_paths)
+
+        for img_path in img_paths:
+            gt_path = img_path.replace('.png', '_{}.npz'.format(args.mode))
+            test_output_path_dict.append({'img': img_path, 'gt': gt_path})
+            if scene not in test_output_path_dict_per_scene:
+                test_output_path_dict_per_scene[scene] = [{'img': img_path, 'gt': gt_path}]
+            else:
+                test_output_path_dict_per_scene[scene].append({'img': img_path, 'gt': gt_path})
+
+    # with open(os.path.join('fdst_{}_train.json'.format(args.mode)), 'w') as f:
+    #     json.dump(train_output_path_dict, f)
+    # with open(os.path.join('fdst_{}_test.json'.format(args.mode)), 'w') as f:
+    #     json.dump(test_output_path_dict, f)
+    with open(os.path.join('ucsd_{}_train.json'.format(args.mode)), 'w') as f:
+        json.dump(train_output_path_dict_per_scene, f)
+    with open(os.path.join('ucsd_{}_test.json'.format(args.mode)), 'w') as f:
+        json.dump(test_output_path_dict_per_scene, f)
+    # with open(os.path.join('fdst_{}_train_per_scene.json'.format(args.mode)), 'w') as f:
+    #     json.dump(train_output_path_dict_per_scene, f)
+    # with open(os.path.join('fdst_{}_test_per_scene.json'.format(args.mode)), 'w') as f:
+    #     json.dump(test_output_path_dict_per_scene, f)
 
 if __name__ == "__main__":
     main()
