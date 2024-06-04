@@ -385,6 +385,7 @@ def UCSDDatasetGenerator(root, mode="once"):
         scene_dir = os.path.join(train_dir, 'vidf1_33_00{}.y'.format(scene_num))
         target_file = os.path.join(root, "vidf-cvpr", 'vidf1_33_00{}_people_full.mat'.format(scene_num))
         mat_data = io.loadmat(target_file, squeeze_me=True)
+        staticff = None
         print(type(mat_data["people"][3]))
         # for p in range(mat_data["people"].shape[0]):
         #     tmp_data = mat_data["people"][p].tolist()  # 0: id, 1: scene, 2: loc, 3: num_pts, 4: ldir, 5: tdir
@@ -426,6 +427,10 @@ def UCSDDatasetGenerator(root, mode="once"):
 
             target = ndimage.gaussian_filter(target, 3)
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            if staticff is None:
+                staticff = target
+            else:
+                staticff += target
             # print(target.max())
 
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
@@ -433,10 +438,15 @@ def UCSDDatasetGenerator(root, mode="once"):
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
             np.savez_compressed(target_file, x=target)
 
+        staticff[staticff>1] = 1.0
+        staticff_path = os.path.join(scene_dir, 'staticff.npz')
+        np.savez_compressed(staticff_path, x=staticff)
+
     for scene_num in test_scene_nums:
         scene_dir = os.path.join(train_dir, 'vidf1_33_00{}.y'.format(scene_num))
         target_file = os.path.join(root, "vidf-cvpr", 'vidf1_33_00{}_people_full.mat'.format(scene_num))
         mat_data = io.loadmat(target_file, squeeze_me=True)
+        staticff = None
 
         for i in range(200):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
@@ -468,11 +478,19 @@ def UCSDDatasetGenerator(root, mode="once"):
 
             target = ndimage.gaussian_filter(target, 3)
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            if staticff is None:
+                staticff = target
+            else:
+                staticff += target
 
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
             target_img_path = img_path.replace('.png', '_target.png')
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
             np.savez_compressed(target_file, x=target)
+
+        staticff[staticff>1] = 1.0
+        staticff_path = os.path.join(scene_dir, 'staticff.npz')
+        np.savez_compressed(staticff_path, x=staticff)
 
 if __name__ == "__main__":
     main()
