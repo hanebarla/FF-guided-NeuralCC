@@ -8,6 +8,7 @@ from torch import nn
 from torch.autograd import Variable
 from torchvision import datasets, models, transforms
 import torch.nn.functional as F
+from timm.scheduler import CosineLRScheduler
 
 from model import CANNet2s, SimpleCNN
 from utils import save_checkpoint, fix_model_state_dict
@@ -17,15 +18,35 @@ from logger import create_logger
 
 
 def optimizer_factory(model, args):
-    if args.opt == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.decay)
-    elif args.opt == "amsgrad":
-        optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.decay, amsgrad=True)
+    if args.opt == "adamw":
+        optimizer = torch.optim.AdamW(model.parameters(), 
+                                     args.lr, 
+                                     eps=args.opt_eps,
+                                     betas=args.opt_betas,
+                                     weight_decay=args.decay)
+    elif args.opt == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), 
+                                     args.lr, 
+                                     weight_decay=args.decay, 
+                                     amsgrad=True)
     elif args.opt == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), args.lr)
+        optimizer = torch.optim.SGD(model.parameters(), 
+                                    args.lr,
+                                    momentum=args.momentum,
+                                    nesterov=True,
+                                    weight_decay=args.decay)
     else:
         raise NotImplementedError(args.opt)
-    return optimizer
+
+    scheduler = None
+    if args.lr_sch == "cosine":
+        scheduler = CosineLRScheduler(optimizer, t_initial=args.lr_t_initial,
+                                      lr_min=args.lr_min, warmup_t=args.warmup_t, 
+                                      warmup_lr_init=args.warmup_lr_init, warmup_prefix=True)
+    elif args.lr_sch == "multistep":
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, args.lr_steps, gamma=args.gamma)
+    
+    return optimizer, scheduler
 
 
 def main():
@@ -37,11 +58,18 @@ def main():
     args.mode = data_mode
 
     # get save dir
-    save_dir = os.path.join(args.exp, args.dataset, "{}_{}".format(data_mode, args.penalty))
+    if args.dataset == "CrowdFlow":
+        save_dir = os.path.join(args.exp, "{}".format(conditions[2]), "{}_{}_{}".format(data_mode, args.activate, args.penalty))
+    else:
+        save_dir = os.path.join(args.exp, args.dataset, "{}_{}_{}".format(data_mode, args.activate, args.penalty))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     logger = create_logger(save_dir, 'train', 'train.log')
     logger.info("[Args]: {}".format(str(args)))
     logger.info("[Save Dir]: {}".format(save_dir))
+    with open(os.path.join(save_dir, "command.json"), "w") as f:
+        json.dump(args.__dict__, f, indent=4)
 
     with open(args.train_data, 'r') as outfile:
         train_data = json.load(outfile)
@@ -55,10 +83,6 @@ def main():
     for data in val_data.values():
         new_val_data.extend(data)
 
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    logger.info(save_dir)
-
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: {}".format(device))
@@ -68,7 +92,8 @@ def main():
     torch.manual_seed(args.seed)
 
     # Dataset
-    train_dataset, val_dataset = dataset_factory(args, train_data, val_data, mode="train")
+    train_dataset, val_dataset = dataset_factory(args, new_train_data, new_val_data)
+    # print(len(train_dataset), len(val_dataset))
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=args.batch_size,
                                                shuffle=True,
@@ -85,15 +110,24 @@ def main():
     # Model
     if args.bn != 0 or args.do_rate > 0.0:
         load_weight = True
+    elif args.dataset == "ucsd":
+        load_weight = True
     else:
         load_weight = False
-    if args.trainmodel == "CAN":
-        model = CANNet2s(load_weights=load_weight, activate=args.activate, bn=args.bn, do_rate=args.do_rate)
-    elif args.trainmodel == "SimpleCNN":
+
+    in_channel = 1 if args.dataset == "ucsd" else 3
+    if args.model == "CAN":
+        model = CANNet2s(load_weights=load_weight, activate=args.activate, bn=args.bn, do_rate=args.do_rate, in_channels=in_channel)
+    elif args.model == "SimpleCNN":
         model = SimpleCNN()
 
     train_time = 0
-    best_prec1 = 100
+    best_prec1 = 1000
+
+    # multiple GPUs
+    if torch.cuda.device_count() > 1:
+        logger.info("You can use {} GPUs!".format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model)
 
     # Train resume
     if os.path.isfile(os.path.join(save_dir, 'checkpoint.pth')):
@@ -106,15 +140,12 @@ def main():
         logger.info("Train resumed: {} epoch".format(args.start_epoch))
         logger.info("best val: {}".format(best_prec1))
 
-    # multiple GPUs
-    if torch.cuda.device_count() > 1:
-        logger.info("You can use {} GPUs!".format(torch.cuda.device_count()))
-        model = torch.nn.DataParallel(model)
     model.to(device)
 
     # define loss function (criterion) and optimizer
     criterion = nn.MSELoss(reduction='sum')
-    optimizer = optimizer_factory(model, args)
+    optimizer, scheduler = optimizer_factory(model, args)
+    logger.info("optimizer: {}, scheduler: {}".format(optimizer, scheduler))
 
     # Speed up
     torch.backends.cudnn.benchmark = True
@@ -124,6 +155,7 @@ def main():
         logger.info("Epoch: [{}/{}]".format(epoch, args.epochs))
         # train for one epoch
         start_epoch_time = time.time()
+        model.train()
         train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
         end_epoch_time = time.time()
 
@@ -131,7 +163,8 @@ def main():
         train_time += epoch_time
 
         # evaluate on validation set
-        prec1 = validate(val_data, model, criterion, device)
+        model.eval()
+        prec1 = validate(args, val_loader, model, criterion,device, logger)
 
         is_best = prec1 < best_prec1
         best_prec1 = min(prec1, best_prec1)
@@ -145,6 +178,11 @@ def main():
         }, is_best,
             filename=os.path.join(save_dir, 'checkpoint.pth'),
             bestname=os.path.join(save_dir, 'model_best.pth'))
+
+        if args.lr_sch == 'cosine':
+            scheduler.step(epoch)
+        elif args.lr_sch == 'multistep':
+            scheduler.step()
 
 
 def train_epoch(args, train_loader, model, criterion, optimizer, device, logger):
@@ -173,7 +211,7 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
 
 
         # mask the boundary locations where people can move in/out between regions outside image plane
-        mask_boundry = torch.zeros(prev_flow.shape[2:])
+        mask_boundry = torch.zeros(prev_flow.shape[2:]).to(device)
         mask_boundry[0, :] = 1.0
         mask_boundry[-1, :] = 1.0
         mask_boundry[:, 0] = 1.0
@@ -224,7 +262,7 @@ def train_epoch(args, train_loader, model, criterion, optimizer, device, logger)
         end = time.time()
 
         if i % args.print_freq == 0:
-            logger.info('Batch: [{1}/{2}]\t'
+            logger.info('Batch: [{}/{}]\t'
                         'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                         'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -243,7 +281,7 @@ def validate(args, val_loader, model, criterion, device, logger):
 
     on_dloss = 1 if args.penalty != 0 else 0
 
-    for i,(prev_img, img, post_img, target ) in enumerate(val_loader):
+    for i, (prev_img, img, post_img, target) in enumerate(val_loader):
         # only use previous frame in inference time, as in real-time application scenario, future frame is not available
         with torch.no_grad():
             prev_img = prev_img.to(device)

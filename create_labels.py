@@ -37,7 +37,7 @@ def main():
     elif args.dataset == "venice":
         pass
     elif args.dataset == "ucsd":
-        # UCSDDatasetGenerator(args.path, args.mode)
+        UCSDDatasetGenerator(args.path, args.mode)
         create_ucsd_json(args)
     else:
         raise NotImplementedError("Dataset {} is not supported.".format(args.dataset))
@@ -49,6 +49,7 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
     ------
         (txtfile, image) --> (annotated image)
     """
+    print("Mode: ", mode)
     anno = np.zeros((720, 1280))
     anno_input_same = np.zeros((360, 640))
     # anno_input_half = np.zeros((180, 320))
@@ -81,6 +82,7 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
         else:
             raise NotImplementedError("mode should be 'add' or 'once'")
 
+    print(anno_input_same.max())
     anno = ndimage.filters.gaussian_filter(anno, 3)
     anno_input_same = ndimage.filters.gaussian_filter(anno_input_same, 3)
     anno_input_eighth = cv2.resize(anno_input_same,
@@ -119,7 +121,7 @@ def CrowdFlowDatasetGenerator(root, mode="once"):
             os.makedirs(os.path.join(FFdataset_path, scene), exist_ok=True)
 
         for fr in range(frame_num):
-            anno, anno_input_same, anno_input_eighth = person_annotate_img_generator(scene_pos, fr)
+            anno, anno_input_same, anno_input_eighth = person_annotate_img_generator(scene_pos, fr, mode=mode)
             staticff_label += anno
             staticff_label_360x640 += anno_input_same
             np.savez_compressed(os.path.join(FFdataset_path, scene, "{}.npz".format(fr)), x=anno)
@@ -201,19 +203,19 @@ def cross_dataset(args, train_list, val_list, test_list, concat_file_index):
     for file_name in train_list:
         train_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
     # json_file_concat(train_file_list, os.path.join('crowdflow{}_train_{}.json'.format(concat_file_index, args.mode)))
-    json_file_concat(train_file_list, os.path.join('crowdflow_{}_train.json'.format(args.mode)))
+    json_file_concat(train_file_list, os.path.join('crowdflow_{}_{}_train.json'.format(args.mode, concat_file_index)))
 
     val_file_list = []
     for file_name in val_list:
         val_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
     # json_file_concat(val_file_list, os.path.join('crowdflow{}_val_{}.json'.format(concat_file_index, args.mode)))
-    json_file_concat(val_file_list, os.path.join('crowdflow_{}_val.json'.format(args.mode)))
+    json_file_concat(val_file_list, os.path.join('crowdflow_{}_{}_val.json'.format(args.mode, concat_file_index)))
 
     test_file_list = []
     for file_name in test_list:
         test_file_list.append(os.path.join('Scene_IM0{}_{}.json'.format(file_name, args.mode)))
     # json_file_concat(test_file_list, os.path.join('crowdflow{}_test_{}.json'.format(concat_file_index, args.mode)))
-    json_file_concat(test_file_list, os.path.join('crowdflow_{}_test.json'.format(args.mode)))
+    json_file_concat(test_file_list, os.path.join('crowdflow_{}_{}_test.json'.format(args.mode, concat_file_index)))
 
 def concat_crowdflow_csv(args):
     A_train_dataset = [1, 2, 3]
@@ -400,7 +402,7 @@ def UCSDDatasetGenerator(root, mode="once"):
         for i in range(200):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
             print(img_path)
-            img = cv2.imread(img_path)
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             target = np.zeros_like(img, dtype=np.float32)
             max_w, max_h = img.shape[1], img.shape[0]
             print(img.shape)
@@ -453,7 +455,7 @@ def UCSDDatasetGenerator(root, mode="once"):
         for i in range(200):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
             print(img_path)
-            img = cv2.imread(img_path)
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             target = np.zeros_like(img, dtype=np.float32)
             max_w, max_h = img.shape[1], img.shape[0]
 

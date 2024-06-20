@@ -1,3 +1,7 @@
 exp/
 .venv/
 *.json
+__pycache__/
+*.out
+jobs/
+*.sh.o*

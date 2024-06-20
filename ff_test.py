@@ -23,7 +23,7 @@ def main():
     test_args = create_test_args()
     args = load_args(test_args.saved_dir)
 
-    with open(args.test_data, 'r') as outfile:
+    with open(test_args.test_data, 'r') as outfile:
         test_data = json.load(outfile)
 
     if test_args.dynamicff == 1 and test_args.staticff == 1:
@@ -37,6 +37,9 @@ def main():
     save_dir = os.path.join(test_args.saved_dir, subdir)
     baseline_dir = os.path.join(test_args.saved_dir, 'baseline')
 
+    if not os.path.isdir(baseline_dir):
+        os.makedirs(baseline_dir)
+
     logger = create_logger(save_dir, 'test', 'test.log')
     logger.info("[Test Args]: {}".format(str(test_args)))
     logger.info("[Train Args]: {}".format(str(args)))
@@ -48,16 +51,15 @@ def main():
 
     # load model
     model = CANNet2s(load_weights=False, activate=args.activate, bn=args.bn, do_rate=args.do_rate)
-    if args.pretrained:
-        checkpoint = torch.load(str(args.load_model), torch.device(device))
-        model.load_state_dict(fix_model_state_dict(checkpoint['state_dict']))
-        try:
-            best_prec1 = checkpoint['val']
-        except KeyError:
-            logger.info("No Key: val")
+    checkpoint = torch.load(os.path.join(test_args.saved_dir, "model_best.pth"), torch.device(device))
+    model.load_state_dict(fix_model_state_dict(checkpoint['state_dict']))
+    try:
+        best_prec1 = checkpoint['val']
+    except KeyError:
+        logger.info("No Key: val")
     # multi gpu
     if torch.cuda.device_count() > 1:
-        print("You can use {} GPUs!".format(torch.cuda.device_count()))
+        logger.info("You can use {} GPUs!".format(torch.cuda.device_count()))
         model = torch.nn.DataParallel(model)
     model.to(device)
 
@@ -66,11 +68,11 @@ def main():
         # dataloader
         _, test_dataset = dataset_factory(args, None, test_data[k])
         test_dataloader = torch.utils.data.DataLoader(test_dataset,
-                                                       batch_size=args.batch_size,
-                                                       num_workers=args.workers,
-                                                       prefetch=args.prefetch,
-                                                       pin_memory=True,
-                                                       shuffle=False)
+                                                      batch_size=args.batch_size,
+                                                      num_workers=args.workers,
+                                                      prefetch_factor=args.prefetch,
+                                                      pin_memory=True,
+                                                      shuffle=False)
 
         # load parameters
         static_param, temperature_param, beta_param, delta_param = get_param(test_args, subdir)
@@ -79,7 +81,7 @@ def main():
         save_dir_scene = os.path.join(save_dir, str(k))
         if not os.path.exists(save_dir_scene):
             os.makedirs(save_dir_scene)
-        with open(os.paht.join(save_dir_scene, "result_per_image.csv"), mode="w") as f:
+        with open(os.path.join(save_dir_scene, "result_per_image.csv"), mode="w") as f:
             writer = csv.writer(f)
             writer.writerow(["index", "target_sum", "pred_sum", "mae", "pix_mae", "pix_rmse"])
 
@@ -97,8 +99,11 @@ def main():
         logger.info("[Scene {}] MAE: {:.3f}, RMSE: {:.3f}, pix MAE: {:.5f}, pix RMSE: {:.5f}"
                     .format(k, results["mae"], results["rmse"], results["pix_mae_val"], results["pix_rmse_val"]))
         # save results
-        with open(os.path.join(save_dir_scene, 'result.json'), mode='w') as f:
-            json.dump(results, f, indent=4)
+        # print(results)
+        np.savez_compressed(os.path.join(save_dir_scene, 'result.npz'), **results)
+        # res = np.load(os.path.join(save_dir_scene, 'result.npz'))
+        # with open(os.path.join(save_dir_scene, 'result.json'), mode='w') as f:
+        #     json.dump(results, f, indent=4)
 
 def get_param(args, subdir):
     if subdir == 'dynamic_static':
@@ -112,6 +117,7 @@ def get_param(args, subdir):
             static_param, temperature_param, beta_param, delta_param = float(params[0][0]), float(params[0][1]), float(params[0][2]), float(params[0][3])
     else:
         static_param, temperature_param, beta_param, delta_param = None, None, None, None
+
     return static_param, temperature_param, beta_param, delta_param
 
 def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, subdir=None, tested_num=None, static_param=1.0, temperature_param=1.0, beta_param=0.5, delta_param=0.5, mode=""):
@@ -162,13 +168,13 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
         # debug_hist_path = os.path.join("/path/to/debug", "{}_hist.png".format(i))
         # debug_hist = {}
         # debug_hist["original"] = pred
-        if test_args.StaticFF == 1:
+        if test_args.staticff == 1:
             # debug_hist["staticff"] = staticff
             pred *= static_param*staticff
             # debug_hist["pred_with_staticff"] = pred
 
         pred_g = gaussian_filter(pred, 3)
-        if test_args.DynamicFF == 1 and past_output is not None:
+        if test_args.dynamicff == 1 and past_output is not None:
             # debug_hist["t-1_dynamicff"] = past_output
             d_t_prev = gaussian_filter(past_output, 3)
             # debug_hist["t-1_dynamicff_g"] = d_t_prev
@@ -182,7 +188,7 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
             pred *= dynamicff
             # debug_hist["pred_with_dynamicff"] = pred
 
-        if test_args.DynamicFF == 1 and past_output is None:
+        if test_args.dynamicff == 1 and past_output is None:
             past_output = beta_param * pred_g
 
         pred_sum = np.sum(pred)
@@ -200,7 +206,7 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
         pred_scene.append(pred_sum)
         gt.append(np.sum(target))
 
-        with open(os.paht.join(subdir, "result_per_image.csv"), mode="a") as f:
+        with open(os.path.join(subdir, "result_per_image.csv"), mode="a") as f:
             writer = csv.writer(f)
             target_sum = np.sum(target)
             mae_per_data = abs(target_sum - pred_sum)

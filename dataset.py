@@ -8,7 +8,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
 import torchvision
-from .utils import *
+from utils import *
 import torchvision.transforms.functional as F
 from torchvision import transforms
 import csv
@@ -35,12 +35,10 @@ def dataset_factory(args, train_data, val_data):
     elif args.dataset == "CrowdFlow":
         train_dataset = CrowdFlowDataset(
             train_data,
-            data_type=args.data_mode,
             transform=transform
         )
         val_dataset = CrowdFlowDataset(
             val_data,
-            data_type=args.data_mode,
             transform=transform
         )
     elif args.dataset == "venice":
@@ -63,6 +61,16 @@ def dataset_factory(args, train_data, val_data):
             data_type=args.data_mode,
             transform=transform
         )
+    elif args.dataset == "ucsd":
+        transform = transforms.Compose([transforms.ToTensor()])
+        train_dataset = UCSDDataset(
+            train_data,
+            transform=transform
+        )
+        val_dataset = UCSDDataset(
+            val_data,
+            transform=transform
+        )
     else:
         raise NotImplementedError("No such dataset {}".format(args.dataset))
     
@@ -70,10 +78,9 @@ def dataset_factory(args, train_data, val_data):
 
 
 class CrowdFlowDataset(Dataset):
-    def __init__(self, dict, transform, mode="once"):
+    def __init__(self, dict, transform):
         self.dict = dict
         self.transform = transform
-        self.mode = mode
 
     def __len__(self):
         return len(self.dict)
@@ -123,162 +130,6 @@ class FDSTDataset(Dataset):
             img = self.transform(img)
             post_img = self.transform(post_img)
         return prev_img, img, post_img, target
-
-
-"""
-ras2bits = 0.71
-IP = {0: 202.5, 1: 247.5, 2: 292.5, 3: 157.5, 5: 337.5, 6: 22.5, 7: 67.5, 8: 112.5}
-
-
-class CrowdDatasets(torch.utils.data.Dataset):
-    def __init__(self, Trainpath="Data/TrainData_Path.csv", transform=None, width=640, height=360, test_on=False, add=False):
-        super().__init__()
-        self.transform = transform
-        self.width = width
-        self.height = height
-        self.out_width = int(width / 8)
-        self.out_height = int(height / 8)
-        self.test_on = test_on
-        self.add = add
-        with open(Trainpath) as f:
-            reader = csv.reader(f)
-            self.Pathes = [row for row in reader]
-
-    def __len__(self):
-        return len(self.Pathes)
-
-    def __getitem__(self, index):
-        pathlist = self.Pathes[index]
-        t_img_path = pathlist[0]
-        t_person_path = pathlist[1]
-        t_m_img_path = pathlist[2]
-        t_m_person_path = pathlist[3]
-        t_m_t_flow_path = pathlist[4]
-        t_p_img_path = pathlist[5]
-        t_p_person_path = pathlist[6]
-        t_t_p_flow_path = pathlist[7]
-
-        if self.add:
-            t_input, t_person = self.gt_npz_density(t_img_path, t_person_path)
-            tm_input, tm_person = self.gt_npz_density(t_m_img_path, t_m_person_path)
-            tp_input, tp_person = self.gt_npz_density(t_p_img_path, t_p_person_path)
-        else:
-            t_input, t_person = self.gt_img_density(t_img_path, t_person_path)
-            tm_input, tm_person = self.gt_img_density(t_m_img_path, t_m_person_path)
-            tp_input, tp_person = self.gt_img_density(t_p_img_path, t_p_person_path)
-
-        # tm2t_flow = self.gt_flow(t_m_t_flow_path)
-        # t2tp_flow = self.gt_flow(t_t_p_flow_path)
-
-        return tm_input, t_input, tp_input, t_person
-
-    def IndexProgress(self, i, gt_flow_edge, h, s):
-        oheight = self.out_height
-        owidth = self.out_width
-        if i == 4:
-            grid_i = np.zeros((oheight, owidth, 1))
-            return grid_i
-        elif i == 9:
-            gt_flow_edge_ndarr = np.array(gt_flow_edge)
-            gtflow_sum = np.sum(gt_flow_edge_ndarr, axis=0)
-            grid_i = gtflow_sum
-            return grid_i
-        else:
-            grid_i = np.where((h >= IP[i] * ras2bits) & (h < ((IP[i] + 45) % 360) * ras2bits), 1, 0)
-            grid_i = np.array(grid_i, dtype=np.uint8)
-            grid_i = s * grid_i
-            grid_i = cv2.resize(grid_i, (owidth, oheight))  # width, height
-            grid_i_inner = grid_i[1:(oheight-1), 1:(owidth-1)]
-            grid_i_edge = grid_i
-            grid_i_inner = np.pad(grid_i_inner, 1)
-            grid_i_edge[1:(oheight-1), 1:(owidth-1)] = 0
-            grid_i_inner = np.reshape(grid_i_inner, (oheight, owidth, 1))  # height, width, channel
-            grid_i_edge = np.reshape(grid_i_edge, (oheight, owidth, 1))
-            gt_flow_edge.append(grid_i_edge)
-
-            return grid_i_inner
-
-    def gt_flow(self, path):
-
-        if not os.path.isfile(path):
-            return print("No such file: {}".format(path))
-
-        gt_flow_list = []
-        gt_flow_edge = []
-        img = cv2.imread(path)
-        img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV_FULL)
-        h, s, v = cv2.split(img_hsv)
-        for i in range(10):
-            grid_i = self.IndexProgress(i, gt_flow_edge, h, s)
-            gt_flow_list.append(grid_i)
-
-        gt_flow_img_data = np.concatenate(gt_flow_list, axis=2)
-        gt_flow_img_data /= np.max(gt_flow_img_data)
-
-
-        # テスト
-        # traj = np.sum(gt_flow_img_data, axis=2)
-        # print(traj.shape)
-
-        # root = os.getcwd()
-        # imgfolder = root + "/images/"
-        # heatmap = cv2.resize(traj, (traj.shape[1]*8, traj.shape[0]*8))
-        # heatmap = np.array(heatmap*255, dtype=np.uint8)
-        # cv2.imwrite(imgfolder+"flow_test.png", heatmap)
-        # print(gt_flow_img_data.shape)
-        # print(np.max(np.sum(gt_flow_img_data, axis=2)))
-
-        gt_flow_img_data = transforms.ToTensor()(gt_flow_img_data)
-
-        return gt_flow_img_data
-
-    def gt_npz_density(self, img_path, gt_path):
-        # print(gt_path)
-        if not os.path.isfile(img_path):
-            return print("No such file: {}".format(img_path))
-        if not os.path.isfile(gt_path):
-            return print("No such file: {}".format(gt_path))
-
-        input_img = cv2.imread(img_path)
-        input_img = cv2.resize(input_img, (self.width, self.height))  # width, height
-        input_img = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB)
-        input_img = input_img / 255  # range [0:1]
-        input_img = self.transform(input_img)
-
-        gt = np.load(gt_path)["x"]
-        # print(gt)
-        gt = torch.from_numpy(gt.astype(np.float32)).clone()
-
-        return input_img, gt
-
-
-    def gt_img_density(self, img_path, mask_path):
-
-        if not os.path.isfile(img_path):
-            return print("No such file: {}".format(img_path))
-        if not os.path.isfile(mask_path):
-            return print("No such file: {}".format(mask_path))
-
-        input_img = cv2.imread(img_path)
-        input_img = cv2.resize(input_img, (self.width, self.height))  # width, height
-        input_img = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB)
-
-        mask_img = cv2.imread(mask_path, 0)
-        if mask_img is None:
-            return print("CRC error: {}".format(mask_path))
-        mask_img = np.reshape(mask_img, (mask_img.shape[0], mask_img.shape[1], 1))
-
-        input_img = input_img / 255  # range [0:1]
-        mask_img = mask_img / np.max(mask_img)
-        mask_img = cv2.resize(mask_img, (self.out_width, self.out_height), interpolation=cv2.INTER_CUBIC)  # width, height
-
-        input_img = self.transform(input_img)
-        # mask_img = transforms.ToTensor()(mask_img)
-        # print("input max: {}".format(torch.max(input_img)))
-        # print("intpu min: {}".format(torch.min(input_img)))
-
-        return input_img, mask_img
-"""
 
 class CityStreetDataset(Dataset):
     def __init__(self, data_dir, data_type, transform=None, scene=None):
@@ -417,6 +268,34 @@ class VeniceDataset(Dataset):
         target = torch.from_numpy(target.astype(np.float32)).clone()
 
         return prev_img, now_img, next_img, target
+    
+class UCSDDataset(Dataset):
+    def __init__(self, data, transform=None):
+        # with open(json_path, 'r') as outfile:
+        #     json_data = json.load(outfile)
+
+        # self.data = []
+        # for d in json_data.keys():
+        #     self.data.append(json_data[d])
+
+        self.data = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        paths = self.data[index]
+
+        prev_img, img, post_img, target = load_ucsd_data(paths["img"], paths["gt"])
+        prev_img = self.transform(prev_img)
+        img = self.transform(img)
+        post_img = self.transform(post_img)
+        # print(prev_img, img, post_img, target)
+        # print(prev_img.size(), img.size(), post_img.size(), target.size())
+        # print(prev_img.shape, img.shape, post_img.shape, target.shape)
+
+        return prev_img, img, post_img, target
 
 
 class Datapath():

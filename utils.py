@@ -53,6 +53,30 @@ def load_data(img_path, target_path):
     target = cv2.resize(target,
                         (int(target.shape[1] / 8),
                          int(target.shape[0] / 8)),
-                        interpolation=cv2.INTER_CUBIC) * 64  # 64 allows max value to be 1.0
+                        interpolation=cv2.INTER_CUBIC) * 64
+
+    return prev_img, img, post_img, target
+
+def load_ucsd_data(img_path, target_path):
+    img_dir = os.path.dirname(img_path)
+    img_name = os.path.basename(img_path)
+
+    file_name = img_name.split('.')[-2]
+    scene_num = file_name.split('_')[2]
+    index = int(file_name.split('_')[-1][1:])  # ..._fxxx.png -> int(xxx)
+
+    prev_index = int(max(1, index - 5))
+    post_index = int(min(200, index + 5))
+
+    prev_img_path = os.path.join(img_dir, 'vidf1_33_{}_f{:0=3}.png'.format(scene_num, prev_index))
+    post_img_path = os.path.join(img_dir, 'vidf1_33_{}_f{:0=3}.png'.format(scene_num, post_index))
+    # print(prev_img_path, img_path, post_img_path)
+
+    prev_img = Image.open(prev_img_path).convert('L')
+    img = Image.open(img_path).convert('L')
+    post_img = Image.open(post_img_path).convert('L')
+
+    target = np.load(target_path)['x']
+    target = torch.tensor(target).float()
 
     return prev_img, img, post_img, target

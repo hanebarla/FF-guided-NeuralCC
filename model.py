@@ -39,12 +39,12 @@ class ContextualModule(nn.Module):
 
 
 class CANNet2s(nn.Module):
-    def __init__(self, load_weights=False, activate="leaky", bn=0, do_rate=0.0):
+    def __init__(self, load_weights=False, activate="leaky", bn=0, do_rate=0.0, in_channels=3):
         super(CANNet2s, self).__init__()
         self.context = ContextualModule(512, 512, activate=activate)
         self.frontend_feat = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512]
         self.backend_feat = [512, 512, 512, 256, 128, 64]
-        self.frontend = make_layers(self.frontend_feat, batch_norm=bn, activate=activate, do_rate=do_rate)
+        self.frontend = make_layers(self.frontend_feat, in_channels=in_channels, batch_norm=bn, activate=activate, do_rate=do_rate)
         self.backend = make_layers(self.backend_feat, in_channels=1024, batch_norm=True, dilation=True, activate=activate, do_rate=do_rate)
         self.output_layer = nn.Conv2d(64, 10, kernel_size=1)
         if activate == "leaky":
@@ -55,7 +55,8 @@ class CANNet2s(nn.Module):
             self.activate = nn.ReLU()
         self.relu = nn.ReLU()
         if not load_weights:
-            mod = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
+            # mod = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
+            mod = models.vgg16(pretrained=True)
             self._initialize_weights()
             # address the mismatch in key names for python 3
             pretrained_dict = {k[9:]: v for k, v in mod.state_dict().items() if k[9:] in self.frontend.state_dict()}

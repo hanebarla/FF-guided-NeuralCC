@@ -14,20 +14,32 @@ def create_train_args():
 
     # model settings
     parser.add_argument('--model', default="CAN")
-    parser.add_argument('--activate', default="leaky")
+    parser.add_argument('--activate', default="relu")
     parser.add_argument('--bn', default=0, type=int)
     parser.add_argument('--do_rate', default=0.0, type=float)
     parser.add_argument('--pretrained', default=0, type=int)
 
     # training settings
+    parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--penalty', default=0, type=float)
-    parser.add_argument('--opt', default="adam")
-    parser.add_argument('--momentum', default=0.95, type=float)
+    parser.add_argument('--opt', default="adamw")
     parser.add_argument('--decay', default=5e-4, type=float)
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--opt_eps', default=1e-8, type=float)
+    parser.add_argument('--opt_betas', default=(0.9, 0.999), type=tuple)
+    parser.add_argument('--momentum', default=0.95, type=float)
+    parser.add_argument('--lr_sch', default="multistep")
+    ## cosine sch
+    parser.add_argument('--lr_t_initial', default=100, type=int)
+    parser.add_argument('--lr_min', default=1e-5, type=float)
+    parser.add_argument('--warmup_t', default=3, type=int)
+    parser.add_argument('--warmup_lr_init', default=1e-5, type=float)
+    ## multistep sch
+    parser.add_argument('--lr_steps', default=[20, 40], nargs='*', type=int)  # 60, 120, 160
+    parser.add_argument('--gamma', default=0.2, type=float)
 
     # misc
+    parser.add_argument('--prefetch', default=4, type=int)
     parser.add_argument('--start_epoch', default=0, type=int)
     parser.add_argument('--print_freq', default=50, type=int)
     parser.add_argument('--workers', default=8, type=int)
