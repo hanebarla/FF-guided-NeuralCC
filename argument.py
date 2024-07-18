@@ -20,7 +20,7 @@ def create_train_args():
     parser.add_argument('--pretrained', default=0, type=int)
 
     # training settings
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--epochs', default=30, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--penalty', default=0, type=float)
     parser.add_argument('--opt', default="adamw")
@@ -35,7 +35,7 @@ def create_train_args():
     parser.add_argument('--warmup_t', default=3, type=int)
     parser.add_argument('--warmup_lr_init', default=1e-5, type=float)
     ## multistep sch
-    parser.add_argument('--lr_steps', default=[20, 40], nargs='*', type=int)  # 60, 120, 160
+    parser.add_argument('--lr_steps', default=[10, 20], nargs='*', type=int)  # 60, 120, 160
     parser.add_argument('--gamma', default=0.2, type=float)
 
     # misc

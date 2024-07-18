@@ -16,7 +16,7 @@ def main():
     test_args = create_test_args()
     args = load_args(test_args.saved_dir)
 
-    with open(args.test_data, 'r') as outfile:
+    with open(test_args.test_data, 'r') as outfile:
         test_data = json.load(outfile)
 
     if test_args.dynamicff == 1 and test_args.staticff == 1:
@@ -28,6 +28,8 @@ def main():
     else:
         subdir = 'baseline'
     save_dir = os.path.join(test_args.saved_dir, subdir)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     baseline_dir = os.path.join(test_args.saved_dir, 'baseline')
 
     logger = create_logger(save_dir, 'hyperparam_tune', 'tune.log')
@@ -57,7 +59,7 @@ def main():
         # load staticff
         staticff = None
         if test_args.staticff == 1:
-            staticff_file = os.path.join(os.path.dirname(test_data[0]["target"]), "staticff_45x80.npz")
+            staticff_file = os.path.join(os.path.dirname(test_data[k][0]["target"]), "staticff_45x80.npz")
             staticff = np.load(staticff_file)["x"]
 
         # search param
@@ -68,7 +70,6 @@ def main():
 def search_params(args, test_dataloader, baseline_dir, save_dir, staticff, logger):
     scene_num = args.scene_num
 
-    target_nums = []
     static_param = 0
     static_param_pix = 0
     beta_param = 0
@@ -87,34 +88,36 @@ def search_params(args, test_dataloader, baseline_dir, save_dir, staticff, logge
     temperature_params = [0.1, 0.5, 1., 5., 10., 50., 100.]
     # temperature_params = [0.3, 0.5, 1., 5., 10., 50., 100.]
 
+    past_output = None
     for i_s, s in enumerate(static_params):
-        if args.StaticFF != 1 and i_s > 0:
+        if args.staticff != 1 and i_s > 0:
             continue
         for i_t, temperature in enumerate(temperature_params):
-            if args.DynamicFF != 1 and i_t > 0:
+            if args.dynamicff != 1 and i_t > 0:
                 continue
             for i_b, beta in enumerate(beta_params):
-                if args.DynamicFF != 1 and i_b > 0:
+                if args.dynamicff != 1 and i_b > 0:
                     continue
                 for i_d, delta in enumerate(delta_params):
-                    if args.DynamicFF != 1 and i_d > 0:
+                    if args.dynamicff != 1 and i_d > 0:
                         continue
                     logger.info("===== {}, {}, {}, {} =====".format(s, temperature, beta, delta))
+                    target_nums = []
                     tmp_output_nums = []
                     _pix_mae = []
 
-                    for i, (prev_img, img, target) in enumerate(test_dataloader):
+                    for i, (prev_img, img, post_img, target) in enumerate(test_dataloader):
                         if i > scene_num:
                             break
                         target_num = np.array(target)
                         normal_dense = np.load(os.path.join(baseline_dir, "{}.npz".format(i)))["x"]
                         height, width = normal_dense.shape
 
-                        if args.StaticFF == 1:
+                        if args.staticff == 1:
                             normal_dense *= s*staticff
 
                         normal_dense_gauss = gaussian_filter(normal_dense, 3)
-                        if args.DynamicFF == 1 and past_output is not None:
+                        if args.dynamicff == 1 and past_output is not None:
                             d_t_prev = gaussian_filter(past_output, 3)
                             past_output = beta * normal_dense_gauss + (1 - delta) * d_t_prev
                             past_output = gaussian_filter(past_output, 3)
@@ -126,6 +129,7 @@ def search_params(args, test_dataloader, baseline_dir, save_dir, staticff, logge
                             past_output = beta * normal_dense_gauss
 
                         _pix_mae.append(np.nanmean(np.abs(np.squeeze(target_num)-normal_dense)))
+                        target_nums.append(target_num.sum())
                         tmp_output_nums.append(normal_dense.sum())
 
                     tmp_mae = mean_absolute_error(target_nums, tmp_output_nums)

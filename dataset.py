@@ -294,6 +294,7 @@ class UCSDDataset(Dataset):
         # print(prev_img, img, post_img, target)
         # print(prev_img.size(), img.size(), post_img.size(), target.size())
         # print(prev_img.shape, img.shape, post_img.shape, target.shape)
+        # print(target.sum())
 
         return prev_img, img, post_img, target
 

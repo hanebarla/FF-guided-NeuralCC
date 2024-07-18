@@ -39,6 +39,7 @@ def main():
     elif args.dataset == "ucsd":
         UCSDDatasetGenerator(args.path, args.mode)
         create_ucsd_json(args)
+        count_ucsd(args)
     else:
         raise NotImplementedError("Dataset {} is not supported.".format(args.dataset))
     
@@ -88,6 +89,7 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
     anno_input_eighth = cv2.resize(anno_input_same,
                                    (int(anno_input_same.shape[1]/8), int(anno_input_same.shape[0]/8)),
                                    interpolation=cv2.INTER_CUBIC)*64
+    anno_input_eighth = ndimage.filters.gaussian_filter(anno_input_eighth, 3)
 
     return anno, anno_input_same, anno_input_eighth
 
@@ -99,7 +101,7 @@ def CrowdFlowDatasetGenerator(root, mode="once"):
         os.mkdir(FFdataset_path)
 
     for i in range(5):
-        scene = "IM0{}".format(i+1)
+        scene = "IM0{}_hDyn".format(i+1)
 
         staticff_label = np.zeros((720, 1280))
         staticff_label_360x640 = np.zeros((360, 640))
@@ -401,12 +403,12 @@ def UCSDDatasetGenerator(root, mode="once"):
 
         for i in range(200):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
-            print(img_path)
+            # print(img_path)
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             target = np.zeros_like(img, dtype=np.float32)
             max_w, max_h = img.shape[1], img.shape[0]
-            print(img.shape)
 
+            num = 0
             for p in range(mat_data["people"].shape[0]):
                 # print("person: ", p)
                 tmp_data = mat_data["people"][p].tolist()
@@ -420,7 +422,8 @@ def UCSDDatasetGenerator(root, mode="once"):
                     elif tmp[-1] != i+1:
                         # print("frame mismatch")
                         continue
-                    print(tmp)
+                    # print(tmp)
+                    num += 1
                     if mode == "once":
                         target[int(tmp[1]), int(tmp[0])] = 1.0
                     elif mode == "add":
@@ -428,8 +431,14 @@ def UCSDDatasetGenerator(root, mode="once"):
                     else:
                         raise NotImplementedError("mode should be 'add' or 'once'")
 
+            original_target = target
             target = ndimage.gaussian_filter(target, 3)
+            first_gauss_target = target
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            shrunken_target = target
+            target = ndimage.gaussian_filter(target, 3)
+            second_gauss_target = target
+            print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
             if staticff is None:
                 staticff = target
             else:
@@ -439,7 +448,7 @@ def UCSDDatasetGenerator(root, mode="once"):
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
             target_img_path = img_path.replace('.png', '_target.png')
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
-            np.savez_compressed(target_file, x=target)
+            np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
 
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
@@ -454,11 +463,12 @@ def UCSDDatasetGenerator(root, mode="once"):
 
         for i in range(200):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
-            print(img_path)
+            # print(img_path)
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             target = np.zeros_like(img, dtype=np.float32)
             max_w, max_h = img.shape[1], img.shape[0]
 
+            num = 0
             for p in range(mat_data["people"].shape[0]):
                 # print("person: ", p)
                 tmp_data = mat_data["people"][p].tolist()
@@ -472,7 +482,8 @@ def UCSDDatasetGenerator(root, mode="once"):
                     elif tmp[-1] != i+1:
                         # print("frame mismatch")
                         continue
-                    print(tmp)
+                    # print(tmp)
+                    num += 1
                     if mode == "once":
                         target[int(tmp[1]), int(tmp[0])] = 1.0
                     elif mode == "add":
@@ -480,17 +491,23 @@ def UCSDDatasetGenerator(root, mode="once"):
                     else:
                         raise NotImplementedError("mode should be 'add' or 'once'")
 
+            original_target = target
             target = ndimage.gaussian_filter(target, 3)
+            first_gauss_target = target
             target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            shrunken_target = target
+            target = ndimage.gaussian_filter(target, 3)
+            second_gauss_target = target
             if staticff is None:
                 staticff = target
             else:
                 staticff += target
+            print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
 
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
             target_img_path = img_path.replace('.png', '_target.png')
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
-            np.savez_compressed(target_file, x=target)
+            np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
 
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
@@ -555,6 +572,35 @@ def create_ucsd_json(args):
     #     json.dump(train_output_path_dict_per_scene, f)
     # with open(os.path.join('fdst_{}_test_per_scene.json'.format(args.mode)), 'w') as f:
     #     json.dump(test_output_path_dict_per_scene, f)
+
+def count_ucsd(args):
+    origin_targets = []
+    first_gauss_targets = []
+    shrunken_targets = []
+    second_gauss_targets = []
+    targets = []
+    nums = []
+    for i in range(10):
+        for t in range(200):
+            tmp_Data = np.load(os.path.join(args.path, 'vidf', 'vidf1_33_00{}.y'.format(i), 'vidf1_33_00{}_f{:0=3}_once.npz'.format(i, t+1)))
+            tmp_target = tmp_Data['x']
+            tmp_num = tmp_Data['num']
+            # print(tmp_num.sum())
+            origin_targets.append(tmp_Data['original'].sum())
+            first_gauss_targets.append(tmp_Data['first_gauss'].sum())
+            shrunken_targets.append(tmp_Data['shrunken'].sum())
+            second_gauss_targets.append(tmp_Data['second_gauss'].sum())
+            targets.append(tmp_target.sum())
+            nums.append(tmp_num)
+
+    plt.plot(targets, label="final Label", alpha=0.5)
+    plt.plot(nums, label="Ground Truth", alpha=0.5)
+    plt.plot(origin_targets, label="Original Label", alpha=0.5)
+    plt.plot(first_gauss_targets, label="First Gaussian Label", alpha=0.5)
+    plt.plot(shrunken_targets, label="Shrunken Label", alpha=0.5)
+    # plt.plot(second_gauss_targets, label="Second Gaussian Label")
+    plt.legend()
+    plt.savefig('ucsd.png', dpi=300)
 
 if __name__ == "__main__":
     main()

@@ -5,3 +5,6 @@ __pycache__/
 *.out
 jobs/
 *.sh.o*
+ucsd*.png
+compare_counts.py
+*.csv
