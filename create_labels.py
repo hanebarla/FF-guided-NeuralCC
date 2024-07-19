@@ -424,21 +424,17 @@ def UCSDDatasetGenerator(root, mode="once"):
                         continue
                     # print(tmp)
                     num += 1
-                    if mode == "once":
-                        target[int(tmp[1]), int(tmp[0])] = 1.0
-                    elif mode == "add":
-                        target[int(tmp[1]), int(tmp[0])] += 1.0
-                    else:
-                        raise NotImplementedError("mode should be 'add' or 'once'")
+                    target[int(tmp[1]/8), int(tmp[0]/8)] += 1.0
 
             original_target = target
             target = ndimage.gaussian_filter(target, 3)
-            first_gauss_target = target
-            target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
-            shrunken_target = target
-            target = ndimage.gaussian_filter(target, 3)
-            second_gauss_target = target
-            print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
+            gauss_target = target
+            # target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            # shrunken_target = target
+            # target = ndimage.gaussian_filter(target, 3)
+            # second_gauss_target = target
+            # print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
+            print(original_target.sum(), gauss_target.sum())
             if staticff is None:
                 staticff = target
             else:
@@ -448,7 +444,8 @@ def UCSDDatasetGenerator(root, mode="once"):
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
             target_img_path = img_path.replace('.png', '_target.png')
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
-            np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
+            # np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
+            np.savez_compressed(target_file, x=target, num=num, original=original_target, gauss=gauss_target)
 
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
@@ -484,30 +481,28 @@ def UCSDDatasetGenerator(root, mode="once"):
                         continue
                     # print(tmp)
                     num += 1
-                    if mode == "once":
-                        target[int(tmp[1]), int(tmp[0])] = 1.0
-                    elif mode == "add":
-                        target[int(tmp[1]), int(tmp[0])] += 1.0
-                    else:
-                        raise NotImplementedError("mode should be 'add' or 'once'")
+                    target[int(tmp[1]/8), int(tmp[0]/8)] += 1.0
 
             original_target = target
             target = ndimage.gaussian_filter(target, 3)
-            first_gauss_target = target
-            target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
-            shrunken_target = target
-            target = ndimage.gaussian_filter(target, 3)
-            second_gauss_target = target
+            gauss_target = target
+            # target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8)), interpolation=cv2.INTER_CUBIC) * 64
+            # target = cv2.resize(target, (int(target.shape[1] / 8), int(target.shape[0] / 8))) * 64
+            # shrunken_target = target
+            # target = ndimage.gaussian_filter(target, 3)
+            # second_gauss_target = target
             if staticff is None:
                 staticff = target
             else:
                 staticff += target
-            print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
+            # print(original_target.sum(), first_gauss_target.sum(), shrunken_target.sum(), second_gauss_target.sum())
+            print(original_target.sum(), gauss_target.sum())
 
             target_file = img_path.replace('.png', '_{}.npz'.format(mode))
             target_img_path = img_path.replace('.png', '_target.png')
             cv2.imwrite(target_img_path, np.array(target/target.max()*255, dtype=np.uint8))
-            np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
+            # np.savez_compressed(target_file, x=target, num=num, original=original_target, first_gauss=first_gauss_target, shrunken=shrunken_target, second_gauss=second_gauss_target)
+            np.savez_compressed(target_file, x=target, num=num, original=original_target, gauss=gauss_target)
 
         staticff[staticff>1] = 1.0
         staticff_path = os.path.join(scene_dir, 'staticff.npz')
@@ -575,9 +570,9 @@ def create_ucsd_json(args):
 
 def count_ucsd(args):
     origin_targets = []
-    first_gauss_targets = []
-    shrunken_targets = []
-    second_gauss_targets = []
+    gauss_targets = []
+    # shrunken_targets = []
+    # second_gauss_targets = []
     targets = []
     nums = []
     for i in range(10):
@@ -587,17 +582,19 @@ def count_ucsd(args):
             tmp_num = tmp_Data['num']
             # print(tmp_num.sum())
             origin_targets.append(tmp_Data['original'].sum())
-            first_gauss_targets.append(tmp_Data['first_gauss'].sum())
-            shrunken_targets.append(tmp_Data['shrunken'].sum())
-            second_gauss_targets.append(tmp_Data['second_gauss'].sum())
+            gauss_targets.append(tmp_Data['gauss'].sum())
+            # shrunken_targets.append(tmp_Data['shrunken'].sum())
+            # second_gauss_targets.append(tmp_Data['second_gauss'].sum())
             targets.append(tmp_target.sum())
             nums.append(tmp_num)
+
+    print("MAE: ", np.abs(np.array(gauss_targets) - np.array(nums)).mean())
 
     plt.plot(targets, label="final Label", alpha=0.5)
     plt.plot(nums, label="Ground Truth", alpha=0.5)
     plt.plot(origin_targets, label="Original Label", alpha=0.5)
-    plt.plot(first_gauss_targets, label="First Gaussian Label", alpha=0.5)
-    plt.plot(shrunken_targets, label="Shrunken Label", alpha=0.5)
+    plt.plot(gauss_targets, label="Gaussian Label", alpha=0.5)
+    # plt.plot(shrunken_targets, label="Shrunken Label", alpha=0.5)
     # plt.plot(second_gauss_targets, label="Second Gaussian Label")
     plt.legend()
     plt.savefig('ucsd.png', dpi=300)
