@@ -50,7 +50,14 @@ def main():
     logger.info("Device: {}".format(device))
 
     # load model
-    model = CANNet2s(load_weights=False, activate=args.activate, bn=args.bn, do_rate=args.do_rate)
+    in_channel = 1 if args.dataset == "ucsd" else 3
+    if args.bn != 0 or args.do_rate > 0.0:
+        load_weight = True
+    elif args.dataset == "ucsd":
+        load_weight = True
+    else:
+        load_weight = False
+    model = CANNet2s(load_weights=load_weight, activate=args.activate, bn=args.bn, do_rate=args.do_rate, in_channels=in_channel)
     checkpoint = torch.load(os.path.join(test_args.saved_dir, "model_best.pth"), torch.device(device))
     model.load_state_dict(fix_model_state_dict(checkpoint['state_dict']))
     try:
@@ -75,7 +82,7 @@ def main():
                                                       shuffle=False)
 
         # load parameters
-        static_param, temperature_param, beta_param, delta_param = get_param(test_args, subdir)
+        static_param, temperature_param, beta_param, delta_param = get_param(test_args, subdir, k)
 
         # create result csv file per scene
         save_dir_scene = os.path.join(save_dir, str(k))
@@ -88,7 +95,8 @@ def main():
         # load staticff
         staticff = None
         if test_args.staticff == 1:
-            staticff_file = os.path.join(os.path.dirname(test_data[0]["target"]), "staticff_45x80.npz")
+            # print(test_data.keys())
+            staticff_file = os.path.join(os.path.dirname(test_data[k][0]["gt"]), "staticff.npz")
             staticff = np.load(staticff_file)["x"]
 
         # validate
@@ -105,11 +113,12 @@ def main():
         # with open(os.path.join(save_dir_scene, 'result.json'), mode='w') as f:
         #     json.dump(results, f, indent=4)
 
-def get_param(args, subdir):
+def get_param(args, subdir, scene):
     if subdir == 'dynamic_static':
-        param_path = os.path.join(args.saved_dir, subdir, 'ff_param.csv')
+        param_path = os.path.join(args.saved_dir, subdir, scene, 'ff_param.csv')
     else:
-        param_path = os.path.join(args.saved_dir, subdir, 'ff_param_pix.csv' if args.pix==1 else 'ff_param.csv')
+        param_path = os.path.join(args.saved_dir, subdir, scene, 'ff_param_pix.csv' if args.pix==1 else 'ff_param.csv')
+    # print(param_path, os.path.isfile(param_path))
     if os.path.isfile(param_path):
         with open(param_path) as f:
             reader = csv.reader(f)
@@ -140,8 +149,8 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
             if i < tested_num:
                 continue
 
-        if os.path.isfile(os.path.join(baseline_dir, "{}.npz".format(i))):
-            pred = np.load(os.path.join(baseline_dir, "{}.npz".format(i)))["x"]
+        if os.path.isfile(os.path.join(subdir, "{}.npz".format(i))):
+            pred = np.load(os.path.join(subdir, "{}.npz".format(i)))["x"]
         else:
             with torch.no_grad():
                 prev_img = prev_img.to(device)
@@ -170,6 +179,7 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
         # debug_hist["original"] = pred
         if test_args.staticff == 1:
             # debug_hist["staticff"] = staticff
+            # print(static_param, staticff.shape)
             pred *= static_param*staticff
             # debug_hist["pred_with_staticff"] = pred
 
@@ -192,11 +202,11 @@ def validate(test_args, val_loader, model, staticff, device, baseline_dir=None, 
             past_output = beta_param * pred_g
 
         pred_sum = np.sum(pred)
-        if not os.path.isfile(os.path.join(baseline_dir, "{}.npz".format(i))) and baseline_dir == os.path.dirname(subdir):
-            if not os.path.exists(baseline_dir):
-                os.makedirs(baseline_dir)
-            np.savez_compressed(os.path.join(baseline_dir, "{}.npz".format(i)), x=overall.detach().numpy().copy())
-            print(baseline_dir, i, "saved")
+        if not os.path.isfile(os.path.join(subdir, "{}.npz".format(i))) and baseline_dir == os.path.dirname(subdir):
+            if not os.path.exists(subdir):
+                os.makedirs(subdir)
+            np.savez_compressed(os.path.join(subdir, "{}.npz".format(i)), x=overall.detach().numpy().copy())
+            print(subdir, i, "saved")
 
         pix_mae.append(np.nanmean(np.abs(target.squeeze()-pred)))
         pix_rmse.append(np.sqrt(np.nanmean(np.square(target.squeeze()-pred))))

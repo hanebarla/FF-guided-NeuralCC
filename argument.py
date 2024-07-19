@@ -14,7 +14,7 @@ def create_train_args():
 
     # model settings
     parser.add_argument('--model', default="CAN")
-    parser.add_argument('--activate', default="relu")
+    parser.add_argument('--activate', default="leaky")
     parser.add_argument('--bn', default=0, type=int)
     parser.add_argument('--do_rate', default=0.0, type=float)
     parser.add_argument('--pretrained', default=0, type=int)

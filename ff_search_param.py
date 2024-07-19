@@ -43,6 +43,7 @@ def main():
 
     # tune per scene
     for k in test_data.keys():
+        baseline = os.path.join(baseline_dir, str(k))
         save_dir_per_scene = os.path.join(save_dir, str(k))
         if not os.path.exists(save_dir_per_scene):
             os.makedirs(save_dir_per_scene)
@@ -59,11 +60,11 @@ def main():
         # load staticff
         staticff = None
         if test_args.staticff == 1:
-            staticff_file = os.path.join(os.path.dirname(test_data[k][0]["target"]), "staticff_45x80.npz")
+            staticff_file = os.path.join(os.path.dirname(test_data[k][0]["gt"]), "staticff.npz")
             staticff = np.load(staticff_file)["x"]
 
         # search param
-        static_param, temperature_param, beta_param, delta_param = search_params(test_args, test_dataloader, baseline_dir, save_dir_per_scene, staticff, logger)
+        static_param, temperature_param, beta_param, delta_param = search_params(test_args, test_dataloader, baseline, save_dir_per_scene, staticff, logger)
         logger.info("Scene Num: {}, StaticFF: {}, Temperature: {}, Beta: {}, Delta: {}".format(k, static_param, temperature_param, beta_param, delta_param))
 
 
