@@ -14,13 +14,13 @@ def create_train_args():
 
     # model settings
     parser.add_argument('--model', default="CAN")
-    parser.add_argument('--activate', default="leaky")
+    parser.add_argument('--activate', default="relu")
     parser.add_argument('--bn', default=0, type=int)
     parser.add_argument('--do_rate', default=0.0, type=float)
     parser.add_argument('--pretrained', default=0, type=int)
 
     # training settings
-    parser.add_argument('--epochs', default=30, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--penalty', default=0, type=float)
     parser.add_argument('--opt', default="adamw")
@@ -35,8 +35,8 @@ def create_train_args():
     parser.add_argument('--warmup_t', default=3, type=int)
     parser.add_argument('--warmup_lr_init', default=1e-5, type=float)
     ## multistep sch
-    parser.add_argument('--lr_steps', default=[10, 20], nargs='*', type=int)  # 60, 120, 160
-    parser.add_argument('--gamma', default=0.2, type=float)
+    parser.add_argument('--lr_steps', default=[20, 40], nargs='*', type=int)  # 60, 120, 160
+    parser.add_argument('--gamma', default=0.1, type=float)
 
     # misc
     parser.add_argument('--prefetch', default=4, type=int)

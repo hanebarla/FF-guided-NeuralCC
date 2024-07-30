@@ -65,8 +65,8 @@ def load_ucsd_data(img_path, target_path):
     scene_num = file_name.split('_')[2]
     index = int(file_name.split('_')[-1][1:])  # ..._fxxx.png -> int(xxx)
 
-    prev_index = int(max(1, index - 5))
-    post_index = int(min(200, index + 5))
+    prev_index = int(max(1, index - 2))
+    post_index = int(min(200, index + 2))
 
     prev_img_path = os.path.join(img_dir, 'vidf1_33_{}_f{:0=3}.png'.format(scene_num, prev_index))
     post_img_path = os.path.join(img_dir, 'vidf1_33_{}_f{:0=3}.png'.format(scene_num, post_index))

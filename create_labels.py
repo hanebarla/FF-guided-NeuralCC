@@ -89,7 +89,6 @@ def person_annotate_img_generator(person_pos, frame, mode="add"):
     anno_input_eighth = cv2.resize(anno_input_same,
                                    (int(anno_input_same.shape[1]/8), int(anno_input_same.shape[0]/8)),
                                    interpolation=cv2.INTER_CUBIC)*64
-    anno_input_eighth = ndimage.filters.gaussian_filter(anno_input_eighth, 3)
 
     return anno, anno_input_same, anno_input_eighth
 
@@ -405,24 +404,28 @@ def UCSDDatasetGenerator(root, mode="once"):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
             # print(img_path)
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            target = np.zeros_like(img, dtype=np.float32)
+            # target = np.zeros_like(img, dtype=np.float32)
+            target = np.zeros((int(img.shape[0]/8), int(img.shape[1]/8)))
+            # print(target.shape)
             max_w, max_h = img.shape[1], img.shape[0]
+            resized_max_w, resized_max_h = int(max_w/8), int(max_h/8)
 
             num = 0
             for p in range(mat_data["people"].shape[0]):
                 # print("person: ", p)
                 tmp_data = mat_data["people"][p].tolist()
-                for tmp in tmp_data[2]:
+                for tmp in tmp_data[2]:  # 0: width pos, 1: height pos
                     if tmp[0] < 0 or tmp[1] < 0:
                         # print("minus position")
                         continue
-                    elif tmp[0] >= max_w or tmp[1] >= max_h:
+                    elif int(tmp[0]/8) >= resized_max_w or int(tmp[1]/8) >= resized_max_h:
                         # print("over position")
                         continue
                     elif tmp[-1] != i+1:
                         # print("frame mismatch")
                         continue
                     # print(tmp)
+                    # print(max_w, tmp[0], resized_max_w, tmp[0]/8, int(tmp[0]/8), max_h, tmp[1], resized_max_h, tmp[1]/8, int(tmp[1]/8))
                     num += 1
                     target[int(tmp[1]/8), int(tmp[0]/8)] += 1.0
 
@@ -462,8 +465,10 @@ def UCSDDatasetGenerator(root, mode="once"):
             img_path = os.path.join(scene_dir, 'vidf1_33_00{}_f{:0=3}.png'.format(scene_num, i+1))
             # print(img_path)
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            target = np.zeros_like(img, dtype=np.float32)
+            # target = np.zeros_like(img, dtype=np.float32)
+            target = np.zeros((int(img.shape[0]/8), int(img.shape[1]/8)))
             max_w, max_h = img.shape[1], img.shape[0]
+            resized_max_w, resized_max_h = int(max_w/8), int(max_h/8)
 
             num = 0
             for p in range(mat_data["people"].shape[0]):
@@ -473,7 +478,7 @@ def UCSDDatasetGenerator(root, mode="once"):
                     if tmp[0] < 0 or tmp[1] < 0:
                         # print("minus position")
                         continue
-                    elif tmp[0] >= max_w or tmp[1] >= max_h:
+                    elif int(tmp[0]/8) >= resized_max_w or int(tmp[1]/8) >= resized_max_h:
                         # print("over position")
                         continue
                     elif tmp[-1] != i+1:

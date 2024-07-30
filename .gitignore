@@ -8,3 +8,4 @@ jobs/
 ucsd*.png
 compare_counts.py
 *.csv
+plot_density_map.py

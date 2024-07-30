@@ -63,6 +63,11 @@ def main():
             staticff_file = os.path.join(os.path.dirname(test_data[k][0]["gt"]), "staticff.npz")
             staticff = np.load(staticff_file)["x"]
 
+        param_path = os.path.join(save_dir_per_scene, "ff_param.csv")
+        if os.path.exists(param_path):
+            print("{} have already existed".format(param_path))
+            continue
+
         # search param
         static_param, temperature_param, beta_param, delta_param = search_params(test_args, test_dataloader, baseline, save_dir_per_scene, staticff, logger)
         logger.info("Scene Num: {}, StaticFF: {}, Temperature: {}, Beta: {}, Delta: {}".format(k, static_param, temperature_param, beta_param, delta_param))
@@ -133,8 +138,10 @@ def search_params(args, test_dataloader, baseline_dir, save_dir, staticff, logge
                         target_nums.append(target_num.sum())
                         tmp_output_nums.append(normal_dense.sum())
 
-                    tmp_mae = mean_absolute_error(target_nums, tmp_output_nums)
-                    tmp_pix_mae = np.mean(np.array(_pix_mae))
+                    abs_diff = np.abs(np.array(target_nums) - np.array(tmp_output_nums))
+                    tmp_mae = np.nanmean(abs_diff)
+                    # tmp_mae = mean_absolute_error(target_nums, tmp_output_nums)
+                    tmp_pix_mae = np.nanmean(np.array(_pix_mae))
                     if tmp_mae < mae:
                         mae = tmp_mae
                         static_param = s
