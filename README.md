@@ -2,15 +2,22 @@
 
 We proposed a method that combines neural networks with crowd dynamics. Specifically, we introduced a loss function to represent prior knowledge of this dynamics and propose static/dynamic floor field models. In the main manuscript, we discussed the effectiveness of these methods through numerical experiments. To ensure reproducibility and transparency of our experiments, we made the scripts used for evaluation available in this repository.
 
+You can find the full paper at the following link: [Floor-Field-Guided Neural Model for Crowd Counting](https://ieeexplore.ieee.org/document/10721477).
+
 <!-- 我々はニューラルネットワークと群衆ダイナミクスを組み合わせた手法を提案した．具体的には，このダイナミクスの事前知識を表す損失関数と静的/動的フロアフィールドモデルを提案し，本文ではその効果について数値実験の結果を通じて詳しく論じた．その実験の再現性・透明性を確保するために，評価に用いたスクリプトを本レポジトリに公開する． -->
 
 To reproduce the experiments, follow the steps outlined below:
-1. [Prepare an environment](#1-prepare-an-environment)
-1. [Make labels and json files](#2-make-labels-and-json-files)
-1. [Train model](#3-train-model)
-1. [Baseline Test](#4-baseline-test)
-1. [Tune hyperperameters of floor field models](#4-tune-hyperparameters-of-floor-field)
-1. [Test](#5-test)
+- [Floor-Field-Guided Neural Model for Crowd Counting](#floor-field-guided-neural-model-for-crowd-counting)
+  - [1. Prepare an environment](#1-prepare-an-environment)
+      - [CrowdFlow](#crowdflow)
+      - [FDST](#fdst)
+      - [CityStreet](#citystreet)
+  - [2. Make labels and json files](#2-make-labels-and-json-files)
+  - [3. Train model](#3-train-model)
+  - [4. Baseline test](#4-baseline-test)
+  - [5. Tune hyperparameters of floor field models](#5-tune-hyperparameters-of-floor-field-models)
+  - [6. Floor-field test](#6-floor-field-test)
+  - [Citation](#citation)
 
 ## 1. Prepare an environment
 First, download the datasets to be used in the experiment. Here are the download instructions of each dataset.
@@ -62,7 +69,8 @@ During training, a subdirectory named `[dataset name]/[label type]_[penalty term
 
 ## 4. Baseline test
 <!-- 次に`ff_test.py`を実行し，ベースラインとなるピュアなExtended CANモデルの推論性能を求め，またこの時に出力されるDensity Mapを保存する．最初の引数は必須引数でテストするデータのjsonファイルを示す．また`--saved_dir`引数は[3. Train model](#3-train-model)で学習したmodelが保存されているディレクトリを指定する．これ以降の実験では全てこのディレクトリに結果が保存される． -->
-Then, execute `ff_test.py` to determine the inference performance of the baseline pure Extended CAN model and save the Density Map output. The first argument is mandatory and specifies the JSON file containing the data to be tested. The `--saved_dir` argument specifies the directory where the trained model saved during the training process (refer to [3. Train model](#3-train-model)). またDensity Mapは`--saved_dir`直下に`baseline`というサブディレクトリに保存される．
+Then, execute `ff_test.py` to determine the inference performance of the baseline pure Extended CAN model and save the Density Map output. The first argument is mandatory and specifies the JSON file containing the data to be tested. The `--saved_dir` argument specifies the directory where the trained model saved during the training process (refer to [3. Train model](#3-train-model)). Additionally, Density maps are saved in subdir `baseline` under `--saved_dir`.
+<!-- またDensity Mapは`--saved_dir`直下に`baseline`というサブディレクトリに保存される． -->
 
 The following command demonstrates testing with the CrowdFlow dataset A:
 ```sh
@@ -91,4 +99,19 @@ Finally, to verify the effectiveness of the proposed method, you can use ```ff_t
 The command below shows an example of testing of both floor fields with CrowdFlow datast A.
 ```sh
 python ff_test.py crowdflow_once_test.json --saved_dir /path/to/save_dir/crowdflow/once_0.1 --dynamicff 1 --staticff 1 --scene_num 100
+```
+
+## Citation
+If you find this repository useful, please cite our paper:
+```
+@ARTICLE{10721477,
+  author={Habara, Takehiro and Kojima, Ryosuke},
+  journal={IEEE Access}, 
+  title={Floor-Field-Guided Neural Model for Crowd Counting}, 
+  year={2024},
+  volume={12},
+  number={},
+  pages={154888-154900},
+  keywords={Neural networks;Estimation;Adaptation models;Computational modeling;Videos;Automata;Training;Crowdsourcing;Density measurement;Crowd counting;deep learning;followability;static/dynamic floor field models},
+  doi={10.1109/ACCESS.2024.3483252}}
 ```
